@@ -1,0 +1,115 @@
+{
+  "test_id": "test_20250828_001",
+  "title": "Test de Afiliación a la Seguridad Social - Conceptos Básicos",
+  "description": "Test sobre requisitos y procedimientos de afiliación al sistema de Seguridad Social español",
+  "created_at": "2025-08-28T10:30:00Z",
+  "category": "afiliacion",
+  "difficulty": "medium",
+  "estimated_duration": 15,
+  "questions": [
+    {
+      "id": 1,
+      "question": "¿Cuál es la característica principal de la afiliación a la Seguridad Social según la normativa vigente?",
+      "options": [
+        "Es voluntaria para todos los trabajadores",
+        "Es obligatoria y única para toda la vida",
+        "Se debe renovar cada año",
+        "Solo aplica a trabajadores por cuenta ajena"
+      ],
+      "correct_answer": 1,
+      "explanation": "La afiliación a la Seguridad Social es obligatoria y única para toda la vida y para todo el sistema, según el artículo 15 de la Ley General de la Seguridad Social.",
+      "source_info": {
+        "document": "BOE-A-2015-11724-consolidado.pdf",
+        "section": "Artículo 15. Obligatoriedad y alcance de la afiliación",
+        "page": 12
+      },
+      "difficulty": "medium",
+      "category": "afiliacion"
+    },
+    {
+      "id": 2,
+      "question": "¿En qué casos los familiares del empresario NO tienen consideración de trabajadores por cuenta ajena?",
+      "options": [
+        "Cuando trabajan menos de 20 horas semanales",
+        "Cuando conviven en el hogar del empresario y están a su cargo",
+        "Cuando tienen más de 65 años",
+        "Cuando trabajan en fines de semana únicamente"
+      ],
+      "correct_answer": 1,
+      "explanation": "Los familiares del empresario hasta el segundo grado que convivan en su hogar y estén a su cargo no tienen consideración de trabajadores por cuenta ajena, salvo prueba en contrario.",
+      "source_info": {
+        "document": "BOE-A-2015-11724-consolidado.pdf",
+        "section": "Artículo 12. Familiares",
+        "page": 11
+      },
+      "difficulty": "medium",
+      "category": "afiliacion"
+    },
+    {
+      "id": 3,
+      "question": "¿Qué permite establecer en los regímenes de la Seguridad Social cuando resulte necesario?",
+      "options": [
+        "Sistemas especiales solo para cotización",
+        "Sistemas especiales en encuadramiento, afiliación, cotización o recaudación",
+        "Excepciones permanentes a la afiliación",
+        "Regímenes temporales de 6 meses"
+      ],
+      "correct_answer": 1,
+      "explanation": "En los regímenes de la Seguridad Social pueden establecerse sistemas especiales exclusivamente en encuadramiento, afiliación, forma de cotización o recaudación cuando resulte necesario.",
+      "source_info": {
+        "document": "BOE-A-2015-11724-consolidado.pdf",
+        "section": "Disposiciones sobre sistemas especiales",
+        "page": 10
+      },
+      "difficulty": "hard",
+      "category": "afiliacion"
+    },
+    {
+      "id": 4,
+      "question": "¿Qué información debe figurar en el Fichero General de Afiliación para el cálculo de bases de cotización?",
+      "options": [
+        "Solo los días trabajados",
+        "Los días trabajados y de alta facilitados por las empresas",
+        "Únicamente las horas trabajadas",
+        "Solo la categoría profesional"
+      ],
+      "correct_answer": 1,
+      "explanation": "La Tesorería General de la Seguridad Social toma los días trabajados y de alta que figuren en el Fichero General de Afiliación, según la información facilitada por las empresas.",
+      "source_info": {
+        "document": "BOE-A-2025-3780-consolidado-cotizaciones.pdf",
+        "section": "Bases de cotización normalizadas",
+        "page": 20
+      },
+      "difficulty": "medium",
+      "category": "cotizacion"
+    },
+    {
+      "id": 5,
+      "question": "¿Qué tipo de resoluciones pueden adoptarse de forma automatizada en los procedimientos de Seguridad Social?",
+      "options": [
+        "Solo las relacionadas con pensiones",
+        "Exclusivamente las de desempleo",
+        "Las de gestión de protección por desempleo y prestaciones del sistema, excepto pensiones no contributivas",
+        "Únicamente las de afiliación"
+      ],
+      "correct_answer": 2,
+      "explanation": "Pueden adoptarse resoluciones automatizadas en procedimientos de protección por desempleo y prestaciones del sistema de Seguridad Social, excluyendo las pensiones no contributivas, así como en afiliación, cotización y recaudación.",
+      "source_info": {
+        "document": "BOE-A-2021-21007-consolidado-IMV.pdf",
+        "section": "Artículo 130. Tramitación electrónica",
+        "page": 55
+      },
+      "difficulty": "hard",
+      "category": "procedimientos"
+    }
+  ],
+  "metadata": {
+    "source_documents": [
+      "BOE-A-2015-11724-consolidado.pdf",
+      "BOE-A-2025-3780-consolidado-cotizaciones.pdf",
+      "BOE-A-2021-21007-consolidado-IMV.pdf"
+    ],
+    "generated_by": "Claude Code",
+    "version": "1.0"
+  }
+}

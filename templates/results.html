@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+
+{% block title %}Resultados - {{ results.test_id }}{% endblock %}
+
+{% block header_title %}Resultados del Test{% endblock %}
+{% block header_subtitle %}
+    {{ "¡Aprobado!" if results.passed else "No aprobado" }} - 
+    {{ "%.0f"|format(results.percentage) }}% de aciertos
+{% endblock %}
+
+{% block extra_nav %}
+<a href="/" class="nav-link">
+    🏠 Nuevo Test
+</a>
+{% endblock %}
+
+{% block content %}
+    <!-- Overall Results -->
+    <div class="card result-summary">
+        <div class="card-body">
+            <div class="result-header">
+                <div class="result-score {{ 'passed' if results.passed else 'failed' }}">
+                    <span class="score-number">{{ "%.0f"|format(results.percentage) }}%</span>
+                    <span class="score-label">{{ "¡Aprobado!" if results.passed else "No aprobado" }}</span>
+                </div>
+                <div class="result-badge">
+                    {% if results.percentage >= 90 %}
+                        <span class="badge excellent">Excelente</span>
+                    {% elif results.percentage >= 80 %}
+                        <span class="badge good">Muy Bien</span>
+                    {% elif results.percentage >= 70 %}
+                        <span class="badge pass">Aprobado</span>
+                    {% elif results.percentage >= 60 %}
+                        <span class="badge low">Mejorable</span>
+                    {% else %}
+                        <span class="badge fail">Suspenso</span>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+        <div class="stat-item">
+            <span class="stat-number">{{ results.score }}</span>
+            <span class="stat-label">Correctas</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ results.total_questions }}</span>
+            <span class="stat-label">Total</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ results.points_earned }}</span>
+            <span class="stat-label">Puntos</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ (results.duration_seconds // 60) }}m</span>
+            <span class="stat-label">Tiempo</span>
+        </div>
+    </div>
+
+    <!-- Performance by Category -->
+    {% if results.category_performance %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Rendimiento por Categoría</h2>
+        </div>
+        <div class="card-body">
+            {% for category, performance in results.category_performance.items() %}
+            <div class="performance-item">
+                <div class="performance-header">
+                    <span class="category-name">{{ category.replace('_', ' ').title() }}</span>
+                    <span class="category-score">{{ performance.correct }}/{{ performance.total }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ performance.percentage }}%"></div>
+                </div>
+                <span class="performance-percentage">{{ "%.0f"|format(performance.percentage) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Performance by Difficulty -->
+    {% if results.difficulty_performance %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Rendimiento por Dificultad</h2>
+        </div>
+        <div class="card-body">
+            {% for difficulty, performance in results.difficulty_performance.items() %}
+            <div class="performance-item">
+                <div class="performance-header">
+                    <span class="difficulty-name difficulty-{{ difficulty }}">{{ difficulty.title() }}</span>
+                    <span class="difficulty-score">{{ performance.correct }}/{{ performance.total }}</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: {{ performance.percentage }}%"></div>
+                </div>
+                <span class="performance-percentage">{{ "%.0f"|format(performance.percentage) }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Actions -->
+    <div class="card">
+        <div class="card-body">
+            <div class="action-buttons">
+                <button class="btn" onclick="showDetailedResults()">
+                    📊 Ver Respuestas Detalladas
+                </button>
+                <button class="btn btn-outline" onclick="shareResults()">
+                    📤 Compartir Resultados
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results (Hidden by default) -->
+    <div class="card" id="detailedResults" style="display: none;">
+        <div class="card-header">
+            <h2 class="card-title">Respuestas Detalladas</h2>
+        </div>
+        <div class="card-body">
+            {% for answer in results.detailed_answers %}
+            <div class="detailed-answer {{ 'correct' if answer.is_correct else 'incorrect' }}">
+                <div class="answer-header">
+                    <span class="question-number">Pregunta {{ loop.index }}</span>
+                    <span class="answer-result">
+                        {% if answer.is_correct %}
+                            ✅ Correcto (+{{ answer.points_earned }} pts)
+                        {% else %}
+                            ❌ Incorrecto (0 pts)
+                        {% endif %}
+                    </span>
+                </div>
+                
+                <div class="question-text">
+                    {{ answer.question_text }}
+                </div>
+                
+                <div class="answer-options">
+                    <div class="your-answer {{ 'correct' if answer.is_correct else 'incorrect' }}">
+                        <strong>Tu respuesta:</strong> {{ answer.selected_option }}
+                    </div>
+                    {% if not answer.is_correct %}
+                    <div class="correct-answer">
+                        <strong>Respuesta correcta:</strong> {{ answer.correct_option }}
+                    </div>
+                    {% endif %}
+                </div>
+                
+                {% if answer.explanation %}
+                <div class="explanation">
+                    <strong>Explicación:</strong> {{ answer.explanation }}
+                </div>
+                {% endif %}
+                
+                {% if answer.time_spent_seconds %}
+                <div class="time-spent">
+                    <small>Tiempo: {{ answer.time_spent_seconds }}s</small>
+                </div>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Session Info -->
+    <div class="session-info">
+        <p class="text-muted">Test completado el {{ results.completed_at.strftime('%d/%m/%Y a las %H:%M') }}</p>
+        <p class="text-muted">ID de sesión: {{ results.session_id }}</p>
+    </div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Result Summary */
+    .result-summary {
+        background: linear-gradient(135deg, #0f4c75 0%, #1e5f8b 100%);
+        color: white;
+    }
+    
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+    
+    .result-score {
+        text-align: center;
+    }
+    
+    .score-number {
+        display: block;
+        font-size: 48px;
+        font-weight: bold;
+        line-height: 1;
+    }
+    
+    .score-label {
+        display: block;
+        font-size: 18px;
+        margin-top: 8px;
+        opacity: 0.9;
+    }
+    
+    .result-badge {
+        text-align: center;
+    }
+    
+    .badge {
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 16px;
+    }
+    
+    .badge.excellent {
+        background: #28a745;
+        color: white;
+    }
+    
+    .badge.good {
+        background: #17a2b8;
+        color: white;
+    }
+    
+    .badge.pass {
+        background: #ffc107;
+        color: #212529;
+    }
+    
+    .badge.low {
+        background: #fd7e14;
+        color: white;
+    }
+    
+    .badge.fail {
+        background: #dc3545;
+        color: white;
+    }
+    
+    /* Performance Items */
+    .performance-item {
+        margin: 16px 0;
+        padding: 16px 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .performance-item:last-child {
+        border-bottom: none;
+    }
+    
+    .performance-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .category-name, .difficulty-name {
+        font-weight: 500;
+        font-size: 16px;
+    }
+    
+    .difficulty-name {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 14px;
+    }
+    
+    .category-score, .difficulty-score {
+        font-weight: 600;
+        color: var(--primary-color);
+    }
+    
+    .performance-percentage {
+        display: block;
+        text-align: right;
+        font-weight: 600;
+        margin-top: 4px;
+        font-size: 14px;
+        color: var(--primary-color);
+    }
+    
+    /* Action Buttons */
+    .action-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    
+    /* Detailed Answers */
+    .detailed-answer {
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 16px 0;
+    }
+    
+    .detailed-answer.correct {
+        border-color: #28a745;
+        background: #f8fff9;
+    }
+    
+    .detailed-answer.incorrect {
+        border-color: #dc3545;
+        background: #fff8f8;
+    }
+    
+    .answer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    
+    .question-number {
+        font-weight: 600;
+        color: var(--primary-color);
+        font-size: 14px;
+    }
+    
+    .answer-result {
+        font-weight: 600;
+        font-size: 14px;
+    }
+    
+    .question-text {
+        font-weight: 500;
+        margin: 12px 0;
+        line-height: 1.4;
+        color: #333;
+    }
+    
+    .answer-options {
+        margin: 12px 0;
+    }
+    
+    .your-answer, .correct-answer {
+        padding: 8px 12px;
+        margin: 8px 0;
+        border-radius: 6px;
+        font-size: 14px;
+    }
+    
+    .your-answer.correct {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    
+    .your-answer.incorrect {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+    
+    .correct-answer {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    
+    .explanation {
+        background: #e2f3ff;
+        border: 1px solid #b8daff;
+        padding: 12px;
+        border-radius: 6px;
+        margin: 12px 0;
+        font-size: 14px;
+        line-height: 1.4;
+    }
+    
+    .time-spent {
+        text-align: right;
+        color: #6c757d;
+        font-size: 12px;
+        margin-top: 8px;
+    }
+    
+    /* Session Info */
+    .session-info {
+        margin-top: 20px;
+        text-align: center;
+        font-size: 12px;
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 767px) {
+        .result-header {
+            text-align: center;
+            flex-direction: column;
+        }
+        
+        .score-number {
+            font-size: 36px;
+        }
+        
+        .score-label {
+            font-size: 16px;
+        }
+        
+        .performance-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+        
+        .answer-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+        }
+    }
+    
+    @media (min-width: 768px) {
+        .action-buttons {
+            flex-direction: row;
+        }
+        
+        .score-number {
+            font-size: 64px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Show/hide detailed results
+    function showDetailedResults() {
+        const detailedResults = document.getElementById('detailedResults');
+        const button = event.target;
+        
+        if (detailedResults.style.display === 'none') {
+            detailedResults.style.display = 'block';
+            button.textContent = '📊 Ocultar Respuestas Detalladas';
+            detailedResults.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            detailedResults.style.display = 'none';
+            button.textContent = '📊 Ver Respuestas Detalladas';
+        }
+    }
+    
+    // Share results
+    function shareResults() {
+        const text = `¡He completado un test de Seguridad Social con un {{ "%.0f"|format(results.percentage) }}%! ` +
+                    `{{ results.score }}/{{ results.total_questions }} correctas en {{ (results.duration_seconds // 60) }} minutos.`;
+        
+        if (navigator.share) {
+            navigator.share({
+                title: 'Mis resultados - Tests de Seguridad Social',
+                text: text,
+                url: window.location.href
+            });
+        } else if (navigator.clipboard) {
+            navigator.clipboard.writeText(text + '\n\n' + window.location.href).then(() => {
+                showTemporaryMessage('¡Resultados copiados al portapapeles!');
+            });
+        } else {
+            // Fallback for older browsers
+            const textArea = document.createElement('textarea');
+            textArea.value = text + '\n\n' + window.location.href;
+            document.body.appendChild(textArea);
+            textArea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textArea);
+            showTemporaryMessage('¡Resultados copiados al portapapeles!');
+        }
+    }
+    
+    // Show temporary message
+    function showTemporaryMessage(message) {
+        const messageEl = document.createElement('div');
+        messageEl.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--success-color);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 1000;
+            font-weight: 500;
+        `;
+        messageEl.textContent = message;
+        document.body.appendChild(messageEl);
+        
+        setTimeout(() => {
+            if (messageEl.parentNode) {
+                messageEl.parentNode.removeChild(messageEl);
+            }
+        }, 3000);
+    }
+    
+    // Auto-scroll to results on mobile
+    document.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth < 768) {
+            setTimeout(() => {
+                document.querySelector('.result-summary').scrollIntoView({ 
+                    behavior: 'smooth',
+                    block: 'start'
+                });
+            }, 100);
+        }
+    });
+    
+    // Confetti effect for excellent results
+    {% if results.percentage >= 90 %}
+    document.addEventListener('DOMContentLoaded', function() {
+        // Simple confetti effect using CSS animation
+        const confettiColors = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'];
+        
+        for (let i = 0; i < 50; i++) {
+            setTimeout(() => {
+                const confetti = document.createElement('div');
+                confetti.style.cssText = `
+                    position: fixed;
+                    width: 10px;
+                    height: 10px;
+                    background: ${confettiColors[Math.floor(Math.random() * confettiColors.length)]};
+                    top: -10px;
+                    left: ${Math.random() * 100}vw;
+                    z-index: 1000;
+                    pointer-events: none;
+                    animation: fall ${2 + Math.random() * 3}s linear forwards;
+                `;
+                
+                document.body.appendChild(confetti);
+                
+                setTimeout(() => {
+                    if (confetti.parentNode) {
+                        confetti.parentNode.removeChild(confetti);
+                    }
+                }, 5000);
+            }, i * 100);
+        }
+    });
+    
+    // Add CSS for confetti animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes fall {
+            from {
+                transform: translateY(-100vh) rotate(0deg);
+                opacity: 1;
+            }
+            to {
+                transform: translateY(100vh) rotate(720deg);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    {% endif %}
+</script>
+{% endblock %}

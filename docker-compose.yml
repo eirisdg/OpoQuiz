@@ -1,0 +1,37 @@
+version: "3.9"
+
+services:
+  test-viewer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ss-test-viewer
+    ports:
+      - "8080:8080"
+    volumes:
+      # Tests JSON - archivos generados manualmente por Claude Code
+      - ./tests:/app/tests:ro
+      # Base de datos SQLite para estadísticas
+      - ./data:/app/data
+      # Templates de referencia
+      - ./test-template.json:/app/test-template.json:ro
+      - ./test-schema.json:/app/test-schema.json:ro
+    environment:
+      - PORT=8080
+      - TESTS_DIR=/app/tests
+      - DATABASE_PATH=/app/data/tests_stats.db
+      - TEMPLATE_PATH=/app/test-template.json
+      - SCHEMA_PATH=/app/test-schema.json
+      - LOG_LEVEL=INFO
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+# Volúmenes nombrados para persistencia
+volumes:
+  test_data:
+    driver: local

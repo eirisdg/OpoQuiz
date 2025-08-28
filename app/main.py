@@ -1,0 +1,819 @@
+"""FastAPI Test Generator - Main Application."""
+
+from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager
+from datetime import datetime
+import os
+import json
+import uuid
+from typing import Dict, List, Optional, Any
+
+from app.config import get_settings, ensure_directories, validate_test_files
+from app.database import init_database, get_db_manager, DatabaseManager
+from app.schemas import (
+    TestListResponse, TestResponse, StartSessionRequest, SessionResponse,
+    QuestionResponse, SubmitAnswerRequest, CompleteTestRequest, TestResultsResponse,
+    RandomTestConfig, RandomTestResponse, GeneralStats, HealthResponse, ErrorResponse,
+    TestSchema, QuestionData, AnswerDetail, CategoryPerformance, DifficultyLevel, CategoryType
+)
+
+settings = get_settings()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan management."""
+    # Startup
+    print(f"🚀 Starting {settings.app_name} v{settings.app_version}")
+    
+    # Ensure directories exist
+    ensure_directories()
+    
+    # Initialize database
+    await init_database()
+    
+    # Validate test files
+    test_files = validate_test_files()
+    
+    # Load tests into memory for faster access
+    app.state.tests_cache = await load_all_tests()
+    print(f"📚 Loaded {len(app.state.tests_cache)} tests into cache")
+    
+    yield
+    
+    # Shutdown
+    print("🛑 Shutting down application")
+
+
+def create_app() -> FastAPI:
+    """Create and configure FastAPI application."""
+    
+    app = FastAPI(
+        title=settings.app_name,
+        version=settings.app_version,
+        description="Interactive test generator for Spanish Social Security documents",
+        docs_url="/docs" if settings.enable_api_docs else None,
+        redoc_url="/redoc" if settings.enable_api_docs else None,
+        lifespan=lifespan
+    )
+    
+    # CORS Configuration
+    if settings.cors_enabled:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=settings.cors_origins,
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+        )
+    
+    # Static files
+    if os.path.exists(settings.static_dir):
+        app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
+    
+    # Templates
+    templates = Jinja2Templates(directory=settings.templates_dir)
+    
+    return app, templates
+
+
+app, templates = create_app()
+
+
+# Utility Functions
+async def load_all_tests() -> Dict[str, TestSchema]:
+    """Load all test files into memory cache."""
+    tests_cache = {}
+    
+    if not os.path.exists(settings.tests_dir):
+        return tests_cache
+    
+    for filename in os.listdir(settings.tests_dir):
+        if filename.endswith('.json'):
+            test_path = os.path.join(settings.tests_dir, filename)
+            try:
+                with open(test_path, 'r', encoding='utf-8') as f:
+                    test_data = json.load(f)
+                    test_schema = TestSchema(**test_data)
+                    tests_cache[test_schema.test_id] = test_schema
+            except Exception as e:
+                print(f"⚠️ Failed to load test {filename}: {e}")
+    
+    return tests_cache
+
+
+def get_client_ip(request: Request) -> str:
+    """Get client IP address."""
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def generate_session_id() -> str:
+    """Generate unique session ID."""
+    return f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+
+
+# HTML Routes
+@app.get("/", response_class=HTMLResponse)
+async def home_page(
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Home page with statistics and test selection."""
+    try:
+        # Get general statistics
+        stats_data = await db.get_general_stats()
+        
+        # Add total tests count to stats
+        stats_data['total_tests_available'] = len(app.state.tests_cache)
+        
+        # Get available tests
+        available_tests = []
+        for test_id, test_schema in app.state.tests_cache.items():
+            available_tests.append({
+                "test_id": test_id,
+                "title": test_schema.title,
+                "description": test_schema.description,
+                "category": test_schema.category,
+                "difficulty": test_schema.difficulty,
+                "questions": test_schema.questions,
+                "estimated_duration": test_schema.estimated_duration
+            })
+        
+        return templates.TemplateResponse("index.html", {
+            "request": request,
+            "stats": stats_data,
+            "available_tests": available_tests,
+            "app_name": settings.app_name,
+            "app_version": settings.app_version
+        })
+        
+    except Exception as e:
+        print(f"Error in home_page: {e}")
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "error": "Error loading application data",
+            "detail": str(e)
+        })
+
+
+@app.get("/test/{session_id}", response_class=HTMLResponse)
+async def test_page(
+    session_id: str,
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Test taking interface - redirect to first question."""
+    try:
+        session_data = await db.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if session_data['status'] == 'completed':
+            # Redirect to results page
+            return templates.TemplateResponse("redirect.html", {
+                "request": request,
+                "redirect_url": f"/results/{session_id}"
+            })
+        
+        # Redirect to current question
+        current_index = session_data.get('current_question_index', 0)
+        return templates.TemplateResponse("redirect.html", {
+            "request": request,
+            "redirect_url": f"/test/{session_id}/question/{current_index}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in test_page: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/test/{session_id}/question/{question_index}", response_class=HTMLResponse)
+async def test_question_page(
+    session_id: str,
+    question_index: int,
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Individual question page."""
+    try:
+        session_data = await db.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if session_data['status'] == 'completed':
+            return templates.TemplateResponse("redirect.html", {
+                "request": request,
+                "redirect_url": f"/results/{session_id}"
+            })
+        
+        # Get test data
+        test_schema = app.state.tests_cache.get(session_data['test_id'])
+        if not test_schema:
+            raise HTTPException(status_code=404, detail="Test not found")
+        
+        # Validate question index
+        if question_index < 0 or question_index >= len(test_schema.questions):
+            raise HTTPException(status_code=404, detail="Question not found")
+        
+        # Get current question
+        question = test_schema.questions[question_index]
+        
+        # Get any existing answer for this question
+        answers_data = session_data.get('answers_data', {})
+        selected_answer = answers_data.get(str(question.id))
+        
+        # Get answered questions for navigation
+        answered_questions = [int(k) for k in answers_data.keys() if answers_data[k] is not None]
+        
+        # Update current question index
+        await db.update_session_progress(session_id, question_index, answers_data)
+        
+        return templates.TemplateResponse("test.html", {
+            "request": request,
+            "session_id": session_id,
+            "test_data": {
+                "title": test_schema.title,
+                "test_id": test_schema.test_id
+            },
+            "question": question,
+            "current_question": question_index,
+            "total_questions": len(test_schema.questions),
+            "selected_answer": selected_answer,
+            "answered_questions": answered_questions,
+            "session_start_time": session_data['started_at'].isoformat() if session_data.get('started_at') else None
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in test_question_page: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/results/{session_id}", response_class=HTMLResponse)
+async def results_page(
+    session_id: str,
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Test results page."""
+    try:
+        session_data = await db.get_session(session_id)
+        if not session_data:
+            raise HTTPException(status_code=404, detail="Session not found")
+        
+        if session_data['status'] != 'completed':
+            raise HTTPException(status_code=400, detail="Test not completed yet")
+        
+        # Get detailed answers
+        answers = await db.get_session_answers(session_id)
+        
+        # Build results structure for template
+        detailed_answers = []
+        test_schema = app.state.tests_cache.get(session_data['test_id'])
+        
+        for answer in answers:
+            if test_schema:
+                question = next((q for q in test_schema.questions if q.id == answer['question_id']), None)
+                if question:
+                    detailed_answers.append({
+                        'question_id': answer['question_id'],
+                        'question_text': answer['question_text'],
+                        'selected_answer': answer['selected_answer'],
+                        'correct_answer': answer['correct_answer'],
+                        'is_correct': answer['is_correct'],
+                        'selected_option': question.options[answer['selected_answer']] if answer['selected_answer'] is not None else "Sin responder",
+                        'correct_option': question.options[answer['correct_answer']],
+                        'explanation': getattr(question, 'explanation', None),
+                        'points_earned': answer['points_earned'],
+                        'time_spent_seconds': answer['time_spent_seconds']
+                    })
+        
+        # Calculate category and difficulty performance
+        category_performance = {}
+        difficulty_performance = {}
+        
+        for answer in answers:
+            if test_schema:
+                question = next((q for q in test_schema.questions if q.id == answer['question_id']), None)
+                if question:
+                    # Category performance
+                    cat = question.category.value if hasattr(question.category, 'value') else str(question.category)
+                    if cat not in category_performance:
+                        category_performance[cat] = {'correct': 0, 'total': 0, 'percentage': 0}
+                    category_performance[cat]['total'] += 1
+                    if answer['is_correct']:
+                        category_performance[cat]['correct'] += 1
+                    
+                    # Difficulty performance
+                    diff = question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty)
+                    if diff not in difficulty_performance:
+                        difficulty_performance[diff] = {'correct': 0, 'total': 0, 'percentage': 0}
+                    difficulty_performance[diff]['total'] += 1
+                    if answer['is_correct']:
+                        difficulty_performance[diff]['correct'] += 1
+        
+        # Calculate percentages
+        for perf in category_performance.values():
+            perf['percentage'] = (perf['correct'] / perf['total'] * 100) if perf['total'] > 0 else 0
+        
+        for perf in difficulty_performance.values():
+            perf['percentage'] = (perf['correct'] / perf['total'] * 100) if perf['total'] > 0 else 0
+        
+        results = {
+            'session_id': session_id,
+            'test_id': session_data['test_id'],
+            'score': session_data['correct_answers'],
+            'total_questions': session_data['total_questions'],
+            'total_points': session_data['total_points'],
+            'points_earned': session_data['points_earned'],
+            'percentage': session_data['score_percentage'],
+            'duration_seconds': session_data['duration_seconds'],
+            'passed': session_data['score_percentage'] >= settings.default_passing_grade,
+            'completed_at': session_data['completed_at'],
+            'category_performance': category_performance,
+            'difficulty_performance': difficulty_performance,
+            'detailed_answers': detailed_answers
+        }
+        
+        return templates.TemplateResponse("results.html", {
+            "request": request,
+            "results": results
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in results_page: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# API Routes
+@app.get("/api/tests", response_model=TestListResponse)
+async def list_tests():
+    """Get list of available tests."""
+    tests = []
+    for test_id, test_schema in app.state.tests_cache.items():
+        tests.append({
+            "test_id": test_id,
+            "title": test_schema.title,
+            "description": test_schema.description,
+            "category": test_schema.category.value,
+            "difficulty": test_schema.difficulty.value,
+            "total_questions": len(test_schema.questions),
+            "estimated_duration": test_schema.estimated_duration,
+            "passing_grade": test_schema.passing_grade
+        })
+    
+    return TestListResponse(tests=tests, total_count=len(tests))
+
+
+@app.get("/api/tests/{test_id}", response_model=TestResponse)
+async def get_test(test_id: str):
+    """Get specific test details."""
+    if test_id not in app.state.tests_cache:
+        raise HTTPException(status_code=404, detail="Test not found")
+    
+    return TestResponse(test=app.state.tests_cache[test_id])
+
+
+@app.post("/api/sessions", response_model=SessionResponse)
+async def start_session(
+    request_data: StartSessionRequest,
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Start a new test session."""
+    test_id = request_data.test_id
+    
+    # Handle random test generation
+    if test_id == 'random' or request_data.is_random_test:
+        test_schema = generate_random_test(request_data.random_config or {})
+        test_id = test_schema.test_id
+        # Store in cache temporarily
+        app.state.tests_cache[test_id] = test_schema
+    elif test_id not in app.state.tests_cache:
+        raise HTTPException(status_code=404, detail="Test not found")
+    else:
+        test_schema = app.state.tests_cache[test_id]
+    
+    session_id = generate_session_id()
+    
+    session_data = {
+        'session_id': session_id,
+        'test_id': test_id,
+        'test_title': test_schema.title,
+        'user_ip': request_data.user_ip or get_client_ip(request),
+        'started_at': datetime.now(),
+        'total_questions': len(test_schema.questions),
+        'is_random_test': request_data.is_random_test,
+        'question_ids': [q.id for q in test_schema.questions]
+    }
+    
+    await db.create_session(session_data)
+    
+    return SessionResponse(
+        session_id=session_id,
+        test_id=test_id,
+        current_question=1,
+        total_questions=len(test_schema.questions),
+        started_at=session_data['started_at'],
+        status="active"
+    )
+
+
+@app.get("/api/sessions/{session_id}/question/{question_index}", response_model=QuestionResponse)
+async def get_question(
+    session_id: str,
+    question_index: int,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Get a specific question for a session."""
+    session_data = await db.get_session(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    test_schema = app.state.tests_cache.get(session_data['test_id'])
+    if not test_schema:
+        raise HTTPException(status_code=404, detail="Test not found")
+    
+    if question_index < 0 or question_index >= len(test_schema.questions):
+        raise HTTPException(status_code=404, detail="Question not found")
+    
+    question = test_schema.questions[question_index]
+    
+    return QuestionResponse(
+        session_id=session_id,
+        question_id=question.id,
+        question=question.question,
+        options=question.options,
+        category=question.category.value,
+        difficulty=question.difficulty.value,
+        current_position=question_index + 1,
+        total_questions=len(test_schema.questions),
+        can_go_previous=question_index > 0,
+        can_go_next=question_index < len(test_schema.questions) - 1
+    )
+
+
+@app.post("/api/sessions/{session_id}/answers")
+async def submit_answer(
+    session_id: str,
+    answer_data: SubmitAnswerRequest,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Submit an answer (without validation)."""
+    session_data = await db.get_session(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    # Update answers in session progress
+    answers = session_data.get('answers_data', {})
+    answers[str(answer_data.question_id)] = {
+        'selected_answer': answer_data.selected_answer,
+        'time_spent_seconds': answer_data.time_spent_seconds
+    }
+    
+    await db.update_session_progress(
+        session_id, 
+        session_data.get('current_question_index', 0),
+        answers
+    )
+    
+    return {"status": "answer_saved", "question_id": answer_data.question_id}
+
+
+@app.post("/api/sessions/{session_id}/complete", response_model=TestResultsResponse)
+async def complete_test(
+    session_id: str,
+    request_data: CompleteTestRequest,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Complete test and calculate results."""
+    session_data = await db.get_session(session_id)
+    if not session_data:
+        raise HTTPException(status_code=404, detail="Session not found")
+    
+    test_schema = app.state.tests_cache.get(session_data['test_id'])
+    if not test_schema:
+        raise HTTPException(status_code=404, detail="Test not found")
+    
+    # Calculate results
+    answers_data = session_data.get('answers_data', {})
+    detailed_answers = []
+    correct_count = 0
+    total_points = 0
+    points_earned = 0
+    category_stats = {}
+    difficulty_stats = {}
+    
+    for question in test_schema.questions:
+        q_id = str(question.id)
+        user_answer_data = answers_data.get(q_id, {})
+        selected_answer = user_answer_data.get('selected_answer')
+        
+        is_correct = selected_answer == question.correct_answer
+        question_points = question.points if is_correct else 0
+        
+        if is_correct:
+            correct_count += 1
+            points_earned += question.points
+        
+        total_points += question.points
+        
+        # Category stats
+        cat = question.category.value
+        if cat not in category_stats:
+            category_stats[cat] = {'correct': 0, 'total': 0}
+        category_stats[cat]['total'] += 1
+        if is_correct:
+            category_stats[cat]['correct'] += 1
+        
+        # Difficulty stats  
+        diff = question.difficulty.value
+        if diff not in difficulty_stats:
+            difficulty_stats[diff] = {'correct': 0, 'total': 0}
+        difficulty_stats[diff]['total'] += 1
+        if is_correct:
+            difficulty_stats[diff]['correct'] += 1
+        
+        # Save answer to database
+        await db.save_answer(session_id, {
+            'question_id': question.id,
+            'question_text': question.question,
+            'selected_answer': selected_answer,
+            'correct_answer': question.correct_answer,
+            'is_correct': is_correct,
+            'points_available': question.points,
+            'points_earned': question_points,
+            'time_spent_seconds': user_answer_data.get('time_spent_seconds', 0)
+        })
+        
+        detailed_answers.append(AnswerDetail(
+            question_id=question.id,
+            question_text=question.question,
+            selected_answer=selected_answer if selected_answer is not None else -1,
+            correct_answer=question.correct_answer,
+            is_correct=is_correct,
+            selected_option=question.options[selected_answer] if selected_answer is not None else "No respondida",
+            correct_option=question.options[question.correct_answer],
+            explanation=question.explanation,
+            points_earned=question_points,
+            time_spent_seconds=user_answer_data.get('time_spent_seconds', 0)
+        ))
+    
+    # Calculate final metrics
+    percentage = (points_earned / total_points * 100) if total_points > 0 else 0
+    duration = int((datetime.now() - datetime.fromisoformat(session_data['started_at'].replace('Z', '+00:00'))).total_seconds())
+    passed = percentage >= test_schema.passing_grade
+    
+    # Complete session
+    await db.complete_session(session_id, {
+        'completed_at': datetime.now(),
+        'correct_answers': correct_count,
+        'total_points': total_points,
+        'points_earned': points_earned,
+        'score_percentage': percentage,
+        'duration_seconds': duration
+    })
+    
+    # Update test statistics
+    await db.update_test_stats(test_schema.test_id, test_schema.title, percentage, len(test_schema.questions))
+    
+    # Build category performance
+    category_performance = {}
+    for cat, stats in category_stats.items():
+        category_performance[cat] = CategoryPerformance(
+            correct=stats['correct'],
+            total=stats['total'],
+            percentage=stats['correct'] / stats['total'] * 100 if stats['total'] > 0 else 0
+        )
+    
+    difficulty_performance = {}
+    for diff, stats in difficulty_stats.items():
+        difficulty_performance[diff] = CategoryPerformance(
+            correct=stats['correct'],
+            total=stats['total'],
+            percentage=stats['correct'] / stats['total'] * 100 if stats['total'] > 0 else 0
+        )
+    
+    return TestResultsResponse(
+        session_id=session_id,
+        test_id=test_schema.test_id,
+        score=correct_count,
+        total_questions=len(test_schema.questions),
+        total_points=total_points,
+        points_earned=points_earned,
+        percentage=round(percentage, 2),
+        duration_seconds=duration,
+        passed=passed,
+        completed_at=datetime.now(),
+        category_performance=category_performance,
+        difficulty_performance=difficulty_performance,
+        detailed_answers=detailed_answers
+    )
+
+
+@app.get("/api/stats", response_model=GeneralStats)
+async def get_stats(db: DatabaseManager = Depends(get_db_manager)):
+    """Get general application statistics."""
+    stats_data = await db.get_general_stats()
+    
+    # Process recent sessions
+    recent_sessions = []
+    for session_data in stats_data.get('recent_sessions', []):
+        recent_sessions.append({
+            'session_id': session_data[0],
+            'test_id': session_data[1], 
+            'test_title': session_data[2],
+            'score_percentage': session_data[3],
+            'completed_at': session_data[4],
+            'duration_seconds': session_data[5]
+        })
+    
+    # Process test statistics
+    test_statistics = []
+    for test_stat_data in stats_data.get('test_statistics', []):
+        test_statistics.append({
+            'test_id': test_stat_data[0],
+            'test_title': test_stat_data[1],
+            'times_taken': test_stat_data[2],
+            'average_score': test_stat_data[3],
+            'best_score': test_stat_data[4],
+            'worst_score': test_stat_data[5],
+            'last_taken': test_stat_data[7]
+        })
+    
+    return GeneralStats(
+        total_tests_available=len(app.state.tests_cache),
+        total_sessions_completed=stats_data['total_sessions_completed'],
+        average_score_all_tests=stats_data['average_score_all_tests'],
+        recent_sessions=recent_sessions,
+        test_statistics=test_statistics
+    )
+
+
+@app.get("/health", response_model=HealthResponse)
+async def health_check(db: DatabaseManager = Depends(get_db_manager)):
+    """Health check endpoint."""
+    db_healthy = await db.health_check()
+    
+    return HealthResponse(
+        status="healthy" if db_healthy else "unhealthy",
+        timestamp=datetime.now(),
+        version=settings.app_version,
+        database_connected=db_healthy,
+        tests_available=len(app.state.tests_cache)
+    )
+
+
+# Utility Functions
+def generate_session_id() -> str:
+    """Generate unique session ID."""
+    return str(uuid.uuid4())
+
+
+def get_client_ip(request: Request) -> str:
+    """Get client IP address."""
+    # Check for forwarded headers first (for proxies)
+    forwarded_for = request.headers.get("X-Forwarded-For")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    
+    forwarded = request.headers.get("X-Forwarded")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip
+    
+    # Fallback to direct client
+    return request.client.host if request.client else "unknown"
+
+
+def generate_random_test(config: Dict[str, Any]) -> TestSchema:
+    """Generate a random test from existing questions."""
+    import random
+    from datetime import datetime
+    
+    # Configuration with defaults
+    num_questions = config.get('num_questions', settings.random_test_default_questions)
+    categories = config.get('categories', [])
+    difficulties = config.get('difficulties', [])
+    exclude_test_ids = config.get('exclude_test_ids', [])
+    allow_repeats = config.get('allow_repeats', False)
+    
+    # Collect all available questions
+    all_questions = []
+    source_test_ids = []
+    
+    for test_id, test_schema in app.state.tests_cache.items():
+        if test_id in exclude_test_ids:
+            continue
+            
+        source_test_ids.append(test_id)
+        
+        for question in test_schema.questions:
+            # Filter by category if specified
+            if categories:
+                question_category = question.category.value if hasattr(question.category, 'value') else str(question.category)
+                if question_category not in categories:
+                    continue
+            
+            # Filter by difficulty if specified
+            if difficulties:
+                question_difficulty = question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty)
+                if question_difficulty not in difficulties:
+                    continue
+            
+            all_questions.append(question)
+    
+    if len(all_questions) < num_questions:
+        num_questions = len(all_questions)
+    
+    if not all_questions:
+        raise HTTPException(status_code=400, detail="No questions available for random test generation")
+    
+    # Select random questions
+    if allow_repeats:
+        selected_questions = random.choices(all_questions, k=num_questions)
+    else:
+        selected_questions = random.sample(all_questions, num_questions)
+    
+    # Reassign IDs to avoid conflicts
+    for i, question in enumerate(selected_questions):
+        question.id = i + 1
+    
+    # Generate random test ID
+    test_id = f"random_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+    
+    # Create test schema
+    random_test = TestSchema(
+        test_id=test_id,
+        title=f"Test Aleatorio ({num_questions} preguntas)",
+        description="Test generado aleatoriamente a partir de preguntas existentes",
+        created_at=datetime.now(),
+        category=CategoryType.GENERAL,
+        difficulty=DifficultyLevel.MIXED,
+        estimated_duration=num_questions * 2,  # 2 minutes per question
+        instructions="Responde todas las preguntas. Se evaluará al finalizar el test.",
+        passing_grade=settings.default_passing_grade,
+        questions=selected_questions,
+        scoring={
+            "total_points": sum(q.points for q in selected_questions),
+            "passing_threshold": settings.default_passing_grade
+        },
+        statistics={
+            "source_tests": len(source_test_ids),
+            "total_source_questions": len(all_questions)
+        }
+    )
+    
+    return random_test
+
+
+async def load_all_tests() -> Dict[str, TestSchema]:
+    """Load all test files into memory."""
+    tests_cache = {}
+    
+    if not os.path.exists(settings.tests_dir):
+        return tests_cache
+    
+    for filename in os.listdir(settings.tests_dir):
+        if filename.endswith('.json'):
+            file_path = os.path.join(settings.tests_dir, filename)
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    test_data = json.load(f)
+                
+                # Convert to TestSchema
+                test_schema = TestSchema(**test_data)
+                tests_cache[test_schema.test_id] = test_schema
+                
+            except Exception as e:
+                print(f"Error loading test file {filename}: {e}")
+                continue
+    
+    return tests_cache
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "app.main:app",
+        host=settings.host,
+        port=settings.port,
+        reload=settings.reload,
+        log_level=settings.log_level.lower()
+    )

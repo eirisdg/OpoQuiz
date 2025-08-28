@@ -1,0 +1,26 @@
+# Web Framework - FastAPI (ultra liviano)
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Base de datos SQLite
+aiosqlite==0.19.0
+
+# Validación y serialización JSON
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Manejo de fechas y UUID
+python-multipart==0.0.6
+python-dateutil==2.8.2
+
+# Templates HTML (Jinja2 incluido con FastAPI)
+jinja2==3.1.2
+
+# Archivos estáticos
+aiofiles==23.2.1
+
+# Logging estructurado
+structlog==23.2.0
+
+# Herramientas de desarrollo (opcional)
+python-json-logger==2.0.7

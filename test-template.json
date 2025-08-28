@@ -1,0 +1,199 @@
+{
+  "test_id": "test_20250828_001",
+  "title": "Test de Derecho Administrativo - Principios Generales",
+  "description": "Test sobre principios fundamentales del derecho administrativo y conceptos básicos de la administración pública",
+  "created_at": "2025-08-28T10:30:00Z",
+  "category": "derecho_administrativo",
+  "difficulty": "medium",
+  "estimated_duration": 15,
+  "instructions": "Lea cada pregunta cuidadosamente y seleccione la respuesta correcta. Solo hay una respuesta correcta por pregunta.",
+  "passing_grade": 70,
+  "questions": [
+    {
+      "id": 1,
+      "question": "¿Cuál es el principio fundamental que rige la actuación de la Administración Pública?",
+      "options": [
+        "Principio de discrecionalidad absoluta",
+        "Principio de legalidad y jerarquía normativa",
+        "Principio de oportunidad política",
+        "Principio de libre decisión administrativa"
+      ],
+      "correct_answer": 1,
+      "explanation": "El principio de legalidad establece que la Administración debe someterse al ordenamiento jurídico y actuar con arreglo a Derecho, según el artículo 9.3 de la Constitución Española.",
+      "source_info": {
+        "document": "Manual_Derecho_Administrativo.pdf",
+        "section": "Tema 1: Principios del Derecho Administrativo",
+        "page": 15,
+        "legal_reference": "Artículo 9.3 CE y Ley 40/2015"
+      },
+      "difficulty": "medium",
+      "category": "derecho_administrativo",
+      "keywords": ["legalidad", "principios", "administración pública", "constitución"],
+      "points": 1
+    },
+    {
+      "id": 2,
+      "question": "¿En qué casos los familiares del empresario NO tienen consideración de trabajadores por cuenta ajena?",
+      "options": [
+        "Cuando trabajan menos de 20 horas semanales",
+        "Cuando conviven en el hogar del empresario y están a su cargo",
+        "Cuando tienen más de 65 años",
+        "Cuando trabajan en fines de semana únicamente"
+      ],
+      "correct_answer": 1,
+      "explanation": "Los familiares del empresario hasta el segundo grado que convivan en su hogar y estén a su cargo no tienen consideración de trabajadores por cuenta ajena, salvo prueba en contrario.",
+      "source_info": {
+        "document": "BOE-A-2015-11724-consolidado.pdf",
+        "section": "Artículo 12. Familiares",
+        "page": 11,
+        "legal_reference": "Real Decreto Legislativo 8/2015, de 30 de octubre"
+      },
+      "difficulty": "medium",
+      "category": "afiliacion",
+      "keywords": ["familiares", "empresario", "cuenta ajena", "convivencia"],
+      "points": 1
+    },
+    {
+      "id": 3,
+      "question": "¿Qué permite establecer en los regímenes de la Seguridad Social cuando resulte necesario?",
+      "options": [
+        "Sistemas especiales solo para cotización",
+        "Sistemas especiales en encuadramiento, afiliación, cotización o recaudación",
+        "Excepciones permanentes a la afiliación",
+        "Regímenes temporales de 6 meses"
+      ],
+      "correct_answer": 1,
+      "explanation": "En los regímenes de la Seguridad Social pueden establecerse sistemas especiales exclusivamente en encuadramiento, afiliación, forma de cotización o recaudación cuando resulte necesario.",
+      "source_info": {
+        "document": "BOE-A-2015-11724-consolidado.pdf",
+        "section": "Disposiciones sobre sistemas especiales",
+        "page": 10,
+        "legal_reference": "Real Decreto Legislativo 8/2015, de 30 de octubre"
+      },
+      "difficulty": "hard",
+      "category": "afiliacion",
+      "keywords": ["sistemas especiales", "regímenes", "encuadramiento", "cotización"],
+      "points": 2
+    },
+    {
+      "id": 4,
+      "question": "¿Qué información debe figurar en el Fichero General de Afiliación para el cálculo de bases de cotización?",
+      "options": [
+        "Solo los días trabajados",
+        "Los días trabajados y de alta facilitados por las empresas",
+        "Únicamente las horas trabajadas",
+        "Solo la categoría profesional"
+      ],
+      "correct_answer": 1,
+      "explanation": "La Tesorería General de la Seguridad Social toma los días trabajados y de alta que figuren en el Fichero General de Afiliación, según la información facilitada por las empresas.",
+      "source_info": {
+        "document": "BOE-A-2025-3780-consolidado-cotizaciones.pdf",
+        "section": "Bases de cotización normalizadas",
+        "page": 20,
+        "legal_reference": "Orden PJC/178/2025, de 25 de febrero"
+      },
+      "difficulty": "medium",
+      "category": "cotizacion",
+      "keywords": ["fichero general", "afiliación", "bases cotización", "días trabajados"],
+      "points": 1
+    },
+    {
+      "id": 5,
+      "question": "¿Qué tipo de resoluciones pueden adoptarse de forma automatizada en los procedimientos de Seguridad Social?",
+      "options": [
+        "Solo las relacionadas con pensiones",
+        "Exclusivamente las de desempleo",
+        "Las de gestión de protección por desempleo y prestaciones del sistema, excepto pensiones no contributivas",
+        "Únicamente las de afiliación"
+      ],
+      "correct_answer": 2,
+      "explanation": "Pueden adoptarse resoluciones automatizadas en procedimientos de protección por desempleo y prestaciones del sistema de Seguridad Social, excluyendo las pensiones no contributivas, así como en afiliación, cotización y recaudación.",
+      "source_info": {
+        "document": "BOE-A-2021-21007-consolidado-IMV.pdf",
+        "section": "Artículo 130. Tramitación electrónica",
+        "page": 55,
+        "legal_reference": "Ley 19/2021, de 20 de diciembre"
+      },
+      "difficulty": "hard",
+      "category": "procedimientos",
+      "keywords": ["resoluciones automatizadas", "tramitación electrónica", "desempleo", "prestaciones"],
+      "points": 2
+    }
+  ],
+  "scoring": {
+    "total_points": 7,
+    "passing_points": 5,
+    "difficulty_weights": {
+      "easy": 1,
+      "medium": 1,
+      "hard": 2
+    }
+  },
+  "statistics": {
+    "questions_by_category": {
+      "afiliacion": 3,
+      "cotizacion": 1,
+      "procedimientos": 1,
+      "prestaciones": 0,
+      "general": 0
+    },
+    "questions_by_difficulty": {
+      "easy": 0,
+      "medium": 3,
+      "hard": 2
+    }
+  },
+  "metadata": {
+    "source_documents": [
+      {
+        "file": "BOE-A-2015-11724-consolidado.pdf",
+        "title": "Real Decreto Legislativo 8/2015, de 30 de octubre, por el que se aprueba el texto refundido de la Ley General de la Seguridad Social",
+        "questions_count": 3
+      },
+      {
+        "file": "BOE-A-2025-3780-consolidado-cotizaciones.pdf", 
+        "title": "Orden PJC/178/2025, de 25 de febrero, por la que se desarrollan las normas legales de cotización a la Seguridad Social",
+        "questions_count": 1
+      },
+      {
+        "file": "BOE-A-2021-21007-consolidado-IMV.pdf",
+        "title": "Ley 19/2021, de 20 de diciembre, por la que se establece el ingreso mínimo vital",
+        "questions_count": 1
+      }
+    ],
+    "generated_by": "Claude Code",
+    "generation_method": "manual",
+    "version": "1.0",
+    "language": "es",
+    "region": "ES",
+    "legal_system": "Spanish Social Security",
+    "last_updated": "2025-08-28T10:30:00Z",
+    "tags": ["afiliacion", "seguridad-social", "normativa", "boe"],
+    "quality_checks": {
+      "grammar_reviewed": true,
+      "legal_accuracy_verified": true,
+      "sources_verified": true,
+      "difficulty_balanced": true
+    }
+  },
+  "ui_config": {
+    "theme": "social-security",
+    "show_progress": true,
+    "show_timer": true,
+    "allow_review": true,
+    "shuffle_options": false,
+    "shuffle_questions": false,
+    "show_explanation_after": "question",
+    "navigation": {
+      "allow_previous": true,
+      "allow_skip": false,
+      "confirm_submit": true
+    },
+    "display_settings": {
+      "questions_per_page": 1,
+      "show_question_numbers": true,
+      "highlight_current": true,
+      "show_category_labels": true
+    }
+  }
+}

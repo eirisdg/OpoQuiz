@@ -1,0 +1,378 @@
+{% extends "base.html" %}
+
+{% block title %}Inicio - Test Generator{% endblock %}
+
+{% block header_title %}Test Generator{% endblock %}
+{% block header_subtitle %}Sistema interactivo de tests{% endblock %}
+
+{% block content %}
+    <!-- Welcome Card -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">¡Bienvenido!</h2>
+            <p class="card-subtitle">Evalúa tus conocimientos sobre cualquier temario</p>
+        </div>
+        <div class="card-body">
+            <p>Selecciona un test específico o genera uno aleatorio para comenzar tu evaluación.</p>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="stats-grid">
+        <div class="stat-item">
+            <span class="stat-number">{{ stats.total_tests_available }}</span>
+            <span class="stat-label">Tests Disponibles</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ stats.total_sessions_completed }}</span>
+            <span class="stat-label">Tests Completados</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ "%.0f"|format(stats.average_score_all_tests) }}%</span>
+            <span class="stat-label">Puntuación Media</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-number">{{ available_tests|length }}</span>
+            <span class="stat-label">Categorías</span>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Acciones Rápidas</h2>
+        </div>
+        <div class="card-body">
+            <button class="btn" onclick="startRandomTest()">
+                🎲 Test Aleatorio
+            </button>
+            <button class="btn btn-outline" onclick="showTestList()">
+                📋 Ver Todos los Tests
+            </button>
+        </div>
+    </div>
+
+    <!-- Available Tests -->
+    <div class="card" id="testListCard" style="display: none;">
+        <div class="card-header">
+            <h2 class="card-title">Tests Disponibles</h2>
+            <p class="card-subtitle">Selecciona un test específico</p>
+        </div>
+        <div class="card-body">
+            {% for test in available_tests %}
+            <div class="test-item" onclick="startTest('{{ test.test_id }}')">
+                <h3 class="test-title">{{ test.title }}</h3>
+                <div class="test-meta">
+                    <span class="test-category">{{ test.category.title() }}</span>
+                    <span class="test-difficulty difficulty-{{ test.difficulty }}">{{ test.difficulty.title() }}</span>
+                    <span class="test-questions">{{ test.questions|length }} preguntas</span>
+                    <span class="test-duration">⏱️ {{ test.estimated_duration }} min</span>
+                </div>
+                {% if test.description %}
+                <p class="test-description">{{ test.description }}</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Recent Results -->
+    {% if stats.recent_sessions %}
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Resultados Recientes</h2>
+        </div>
+        <div class="card-body">
+            {% for session in stats.recent_sessions %}
+            <div class="recent-session">
+                <div class="session-header">
+                    <span class="session-title">{{ session[2] }}</span>
+                    <span class="session-score score-{{ 'high' if session[3] >= 80 else 'medium' if session[3] >= 60 else 'low' }}">
+                        {{ "%.0f"|format(session[3]) }}%
+                    </span>
+                </div>
+                <div class="session-meta">
+                    <span class="session-date">{{ session[4].strftime('%d/%m/%Y %H:%M') if session[4] else 'Fecha no disponible' }}</span>
+                    <span class="session-duration">⏱️ {{ (session[5] // 60) if session[5] else 0 }} min</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="loading"></div>
+            <p>Preparando tu test...</p>
+        </div>
+    </div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Test List Styles */
+    .test-item {
+        background: #f8f9fa;
+        border: 2px solid #dee2e6;
+        border-radius: 8px;
+        padding: 16px;
+        margin: 12px 0;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+    
+    .test-item:hover {
+        border-color: var(--primary-color);
+        background: white;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    
+    .test-title {
+        font-size: 16px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        color: var(--primary-color);
+    }
+    
+    .test-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin: 8px 0;
+        font-size: 12px;
+    }
+    
+    .test-category {
+        background: var(--primary-color);
+        color: white;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+    
+    .test-difficulty {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+    
+    .difficulty-easy {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .difficulty-medium {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .difficulty-hard {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .test-questions, .test-duration {
+        color: #6c757d;
+        font-weight: 500;
+    }
+    
+    .test-description {
+        font-size: 14px;
+        color: #6c757d;
+        margin: 8px 0 0 0;
+        line-height: 1.4;
+    }
+    
+    /* Recent Sessions */
+    .recent-session {
+        border-bottom: 1px solid #eee;
+        padding: 12px 0;
+    }
+    
+    .recent-session:last-child {
+        border-bottom: none;
+    }
+    
+    .session-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+    
+    .session-title {
+        font-weight: 500;
+        color: var(--primary-color);
+        font-size: 14px;
+    }
+    
+    .session-score {
+        font-weight: bold;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 12px;
+    }
+    
+    .score-high {
+        background: #d4edda;
+        color: #155724;
+    }
+    
+    .score-medium {
+        background: #fff3cd;
+        color: #856404;
+    }
+    
+    .score-low {
+        background: #f8d7da;
+        color: #721c24;
+    }
+    
+    .session-meta {
+        display: flex;
+        gap: 16px;
+        font-size: 12px;
+        color: #6c757d;
+    }
+    
+    /* Modal */
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+    }
+    
+    .modal-content {
+        background: white;
+        padding: 32px;
+        border-radius: 12px;
+        text-align: center;
+        min-width: 200px;
+    }
+    
+    .modal-content p {
+        margin: 16px 0 0 0;
+        color: #6c757d;
+    }
+    
+    /* Responsive adjustments */
+    @media (min-width: 768px) {
+        .test-meta {
+            font-size: 14px;
+        }
+        
+        .test-title {
+            font-size: 18px;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Show/hide test list
+    function showTestList() {
+        const testListCard = document.getElementById('testListCard');
+        if (testListCard.style.display === 'none') {
+            testListCard.style.display = 'block';
+            testListCard.scrollIntoView({ behavior: 'smooth' });
+        } else {
+            testListCard.style.display = 'none';
+        }
+    }
+    
+    // Start a specific test
+    async function startTest(testId) {
+        showLoadingModal();
+        
+        try {
+            const response = await apiCall('/api/sessions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    test_id: testId,
+                    user_ip: null,
+                    is_random_test: false
+                })
+            });
+            
+            if (response.session_id) {
+                window.location.href = `/test/${response.session_id}`;
+            }
+        } catch (error) {
+            console.error('Error starting test:', error);
+            showError('Error al iniciar el test. Inténtalo de nuevo.');
+        } finally {
+            hideLoadingModal();
+        }
+    }
+    
+    // Start random test
+    async function startRandomTest() {
+        showLoadingModal();
+        
+        try {
+            const response = await apiCall('/api/sessions', {
+                method: 'POST',
+                body: JSON.stringify({
+                    test_id: 'random',
+                    user_ip: null,
+                    is_random_test: true,
+                    random_config: {
+                        num_questions: 10
+                    }
+                })
+            });
+            
+            if (response.session_id) {
+                window.location.href = `/test/${response.session_id}`;
+            }
+        } catch (error) {
+            console.error('Error starting random test:', error);
+            showError('Error al crear test aleatorio. Inténtalo de nuevo.');
+        } finally {
+            hideLoadingModal();
+        }
+    }
+    
+    // Loading modal functions
+    function showLoadingModal() {
+        document.getElementById('loadingModal').style.display = 'flex';
+    }
+    
+    function hideLoadingModal() {
+        document.getElementById('loadingModal').style.display = 'none';
+    }
+    
+    // Auto-hide test list on mobile after selection
+    function handleTestSelection() {
+        if (window.innerWidth < 768) {
+            document.getElementById('testListCard').style.display = 'none';
+        }
+    }
+    
+    // Add event listeners for better mobile experience
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add touch feedback for test items
+        const testItems = document.querySelectorAll('.test-item');
+        testItems.forEach(item => {
+            item.addEventListener('touchstart', function() {
+                this.style.transform = 'scale(0.98)';
+            });
+            item.addEventListener('touchend', function() {
+                this.style.transform = '';
+            });
+        });
+    });
+</script>
+{% endblock %}
