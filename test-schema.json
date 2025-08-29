@@ -1,51 +1,28 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "Test de Seguridad Social",
-  "description": "Estructura JSON para tests de Seguridad Social generados manualmente desde Claude Code",
+  "title": "Banco de Preguntas",
+  "description": "Estructura JSON para bancos de preguntas que se cargan dinámicamente en la base de datos para generar tests",
   "type": "object",
-  "required": ["test_id", "title", "created_at", "questions"],
+  "required": ["bank_id", "title", "questions"],
   "properties": {
-    "test_id": {
+    "bank_id": {
       "type": "string",
-      "pattern": "^test_[0-9]{4}[0-9]{2}[0-9]{2}_[0-9]{3}$",
-      "description": "ID único del test en formato test_YYYYMMDD_XXX",
-      "example": "test_20250828_001"
+      "pattern": "^bank_[0-9]{4}[0-9]{2}[0-9]{2}_[0-9]{3}$",
+      "description": "ID único del banco en formato bank_YYYYMMDD_XXX",
+      "example": "bank_20250829_001"
     },
     "title": {
       "type": "string",
       "minLength": 10,
       "maxLength": 100,
-      "description": "Título descriptivo del test",
-      "example": "Test de Afiliación y Cotización SS - Agosto 2025"
+      "description": "Título descriptivo del banco de preguntas",
+      "example": "Banco de Preguntas - Afiliación y Cotización SS"
     },
     "description": {
       "type": "string",
       "maxLength": 500,
-      "description": "Descripción opcional del test",
-      "example": "Test centrado en requisitos de afiliación y procedimientos de cotización"
-    },
-    "created_at": {
-      "type": "string",
-      "format": "date-time",
-      "description": "Fecha y hora de creación del test",
-      "example": "2025-08-28T10:30:00Z"
-    },
-    "category": {
-      "type": "string",
-      "enum": ["afiliacion", "cotizacion", "prestaciones", "procedimientos", "general"],
-      "description": "Categoría principal del test"
-    },
-    "difficulty": {
-      "type": "string",
-      "enum": ["easy", "medium", "hard", "mixed"],
-      "description": "Nivel de dificultad del test"
-    },
-    "estimated_duration": {
-      "type": "integer",
-      "minimum": 5,
-      "maximum": 120,
-      "description": "Duración estimada en minutos",
-      "example": 45
+      "description": "Descripción opcional del banco de preguntas",
+      "example": "Banco centrado en requisitos de afiliación y procedimientos de cotización"
     },
     "questions": {
       "type": "array",
@@ -134,6 +111,10 @@
               "type": "integer",
               "minimum": 1,
               "description": "Página del documento (si aplica)"
+            },
+            "legal_reference": {
+              "type": "string",
+              "description": "Referencia legal específica"
             }
           }
         },
@@ -144,8 +125,24 @@
         },
         "category": {
           "type": "string",
-          "enum": ["afiliacion", "cotizacion", "prestaciones", "procedimientos", "general"],
-          "description": "Categoría temática de la pregunta"
+          "description": "Categoría temática de la pregunta - cualquier string es válido",
+          "example": "afiliacion"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Palabras clave para filtrado y búsqueda",
+          "example": ["afiliacion", "obligatoria", "única"]
+        },
+        "estimated_time_seconds": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 300,
+          "description": "Tiempo estimado para responder la pregunta en segundos",
+          "default": 90,
+          "example": 90
         }
       }
     }

@@ -1,317 +1,218 @@
 # 📚 Generic Test Generator
 
-Sistema de generación y realización de tests interactivos para cualquier temario de oposiciones.
+Sistema de generación y realización de tests interactivos para cualquier temario educativo.
 
 ## 🎯 Descripción
 
-Aplicación web móvil-first que permite realizar tests sobre cualquier temario utilizando un formato JSON estándar. Ideal para preparación de oposiciones, exámenes universitarios, certificaciones profesionales, etc. Los tests se almacenan como archivos JSON y las estadísticas se guardan en SQLite local.
+Aplicación web móvil-first que permite realizar tests sobre cualquier temario utilizando un formato JSON estándar. Ideal para preparación de oposiciones, exámenes universitarios, certificaciones profesionales, etc. 
 
-## 🎯 Objetivos
+**Características principales:**
+- **Interfaz móvil-first simplificada** con navegación optimizada
+- **Sistema dinámico de preguntas** con banco de datos centralizado
+- **3 modos de test inteligentes**: Aleatorio, por Categoría, por Dificultad
+- **Panel de administración** para subir y gestionar bancos de preguntas
+- **Anti-repetición inteligente** que evita preguntas recién respondidas
+- **Duración calculada** basada en tiempo estimado por pregunta (30-300s)
+- **Estadísticas avanzadas** de uso y rendimiento por usuario
+- **Despliegue simple** con Docker y carga automática
 
-- **Interfaz HTML interactiva** móvil-first para realizar tests
-- **Tests basados en JSON** con formato estándar flexible
-- **Navegación sin validación inmediata** - evaluación solo al finalizar
-- **Tests aleatorios** combinando preguntas de múltiples tests
-- **Histórico de resultados** persistente en SQLite
-- **Despliegue containerizado** ultra-simple con Docker
-- **Template JSON genérico** para cualquier temario
+## 🚀 Inicio Rápido
 
-## ✨ Características Principales
+### Requisitos
+- Docker y Docker Compose instalados
 
-### 🎲 Gestión de Tests
-- **Formato estándar**: JSON estructurado compatible con cualquier temario
-- **Tests aleatorios**: Combina preguntas de múltiples tests existentes
-- **Tipos de pregunta**: Opción múltiple (4 opciones, 1 correcta)
-- **Cantidad flexible**: 5-50 preguntas por test
-- **Fácil importación**: Simplemente añade archivos JSON al directorio tests/
+### Instalación
+1. **Clonar el repositorio**
+   ```bash
+   git clone <repository-url>
+   cd test-generator
+   ```
 
-### 📱 Interfaz Móvil-First
-- **Diseño responsive**: Optimizado primero para móviles, luego escritorio
-- **Botones táctiles**: 44px mínimo siguiendo estándares de usabilidad móvil
-- **Navegación intuitiva**: Progreso visual, navegación entre preguntas
-- **Sin validación inmediata**: Las respuestas se evalúan solo al finalizar
-- **Navegación libre**: Permite ir hacia adelante y atrás, cambiar respuestas
+2. **Añadir bancos de preguntas JSON**
+   - Coloca archivos JSON en el directorio `tests/` con formato `bank_YYYYMMDD_XXX.json`
+   - Usa `question-bank-template.json` como referencia
+   - Sigue el formato del `test-schema.json` (actualizado para bancos)
+   - Alternativamente, usa el **Panel Admin** desde la web
+
+3. **Ejecutar la aplicación**
+   ```bash
+   docker compose up --build
+   ```
+
+4. **Acceder a la aplicación**
+   - Abrir http://localhost:8080 en tu navegador
+   - La interfaz está optimizada para dispositivos móviles
+
+### Comandos Básicos
+```bash
+# Iniciar aplicación
+docker compose up -d
+
+# Ver logs
+docker compose logs -f
+
+# Parar aplicación
+docker compose down
+
+# Reiniciar completamente
+docker compose down -v && docker compose up --build
+```
+
+## ✨ Funcionalidades
+
+### 📚 Tests Interactivos
+- **Navegación optimizada**: Sin barra superior, botón Inicio en header
+- **Selección simplificada**: 3 opciones principales claramente diferenciadas
+- **Carga desde JSON**: Tests directamente desde archivos en tests/
+- **Interfaz táctil**: Optimizada para smartphones y tablets
+
+### 🎲 Modos de Test Dinámicos
+- **🎲 Test Aleatorio**: Preguntas aleatorias de todos los bancos con anti-repetición inteligente
+- **📂 Test por Categoría**: Selección múltiple de categorías con filtros avanzados
+- **⭐ Test por Dificultad**: Tests filtrados por nivel (Easy, Medium, Hard, Mixed)
+- **🔄 Repasar Fallos**: Test con preguntas previamente falladas por el usuario
+- **🔧 Panel Admin**: Gestión completa de bancos de preguntas
+
+### 📊 Estadísticas y Seguimiento
 - **Resultados detallados**: Puntuación, tiempo, análisis por categorías
+- **Respuestas completas**: Ver respuestas incorrectas con explicaciones y fuentes
+- **Información de fuente**: Documento, sección, página y referencia legal
+- **Tests de repaso**: Genera automáticamente tests con preguntas falladas
+- **Histórico completo**: Todas las sesiones guardadas automáticamente
+- **Análisis de rendimiento**: Identifica áreas de mejora
 
-### 💾 Almacenamiento y Persistencia
-- **Tests como JSON**: Archivos estáticos en directorio `tests/` con ID único
-- **Base de datos SQLite**: Integrada para estadísticas y seguimiento de progreso
-- **Sesiones persistentes**: Permite continuar tests interrumpidos
-- **Estadísticas completas**: Análisis por categoría, dificultad, rendimiento histórico
+## 📝 Cómo Crear Bancos de Preguntas
 
-## 📋 Estructura JSON de Tests (Genérica)
+### Archivos de Referencia
+La aplicación incluye archivos de referencia para trabajar con bancos de preguntas:
 
-### Campos Principales del Test
+#### 📋 **`question-bank-template.json`** - Plantilla Base
+- **Propósito**: Template completo para crear nuevos bancos de preguntas
+- **Uso**: `cp question-bank-template.json tests/bank_YYYYMMDD_XXX.json`
+- **Contiene**: Ejemplo con estructura optimizada y todas las propiedades
+- **Recomendación**: **Usar este como base para todos los bancos nuevos**
+
+#### 📐 **`test-schema.json`** - Especificación Técnica  
+- **Propósito**: Documentación técnica del formato JSON de bancos
+- **Uso**: Consulta para entender reglas y validaciones
+- **Contiene**: Tipos de datos, campos requeridos, patrones de validación
+- **Recomendación**: Consultar cuando tengas dudas sobre el formato
+
+#### 🔧 **Panel de Administración Web**
+- **URL**: `http://localhost:8080/admin` 
+- **Funciones**: Subir archivos, gestionar bancos, ver estadísticas
+- **Validación**: Automática al subir archivos JSON
+- **Recomendación**: **Método más fácil para usuarios no técnicos**
+
+### Estructura Básica
 ```json
 {
-  "test_id": "test_20250828_001",
-  "title": "Examen de Derecho Administrativo - Tema 1",
-  "description": "Test sobre conceptos básicos del derecho administrativo",
-  "category": "derecho_administrativo",
-  "difficulty": "medium",
-  "estimated_duration": 15,
-  "passing_grade": 70,
-  "questions": [...],
-  "scoring": {
-    "total_points": 10,
-    "difficulty_weights": { "easy": 1, "medium": 1, "hard": 2 }
-  },
-  "metadata": {
-    "generated_by": "Claude Code",
-    "source_documents": ["BOE-2023-001.pdf", "Manual_Tema1.pdf"],
-    "legal_system": "Spanish Administrative Law",
-    "subject": "Oposiciones Administrativo del Estado"
-  }
+  "bank_id": "bank_20250829_001",
+  "title": "Banco de Preguntas - Tu Temario",
+  "description": "Banco de preguntas sobre tu temario específico",
+  "questions": [
+    {
+      "id": "q_001",
+      "question": "¿Tu pregunta aquí?",
+      "options": [
+        "Opción A",
+        "Opción B", 
+        "Opción C",
+        "Opción D"
+      ],
+      "correct_answer": 0,
+      "explanation": "Explicación de por qué es correcta",
+      "difficulty": "medium",
+      "category": "tu_categoria",
+      "keywords": ["palabra1", "palabra2"],
+      "estimated_time_seconds": 90,
+      "source_info": {
+        "document": "Manual_Temario.pdf",
+        "section": "Capítulo 1",
+        "page": 15,
+        "legal_reference": "Artículo 1.1"
+      }
+    }
+  ]
 }
 ```
 
-### Estructura de Pregunta Individual
-```json
-{
-  "id": 1,
-  "question": "¿Cuál es el principio fundamental que rige...?",
-  "options": [
-    "Principio de legalidad",
-    "Principio de oportunidad", 
-    "Principio de discrecionalidad",
-    "Principio de jerarquía"
-  ],
-  "correct_answer": 0,
-  "explanation": "El principio de legalidad establece que...",
-  "source_info": {
-    "document": "Manual_Derecho_Administrativo.pdf",
-    "section": "Tema 1: Principios Generales",
-    "page": 15,
-    "legal_reference": "Artículo 9.3 CE"
-  },
-  "difficulty": "medium",
-  "category": "principios_generales",
-  "keywords": ["legalidad", "principios", "derecho administrativo"],
-  "points": 1
-}
+### Pasos para Añadir Tests
+
+#### Método Recomendado (usando template)
+```bash
+# 1. Copiar el template base
+cp test-template.json tests/test_20250829_003.json
+
+# 2. Editar el archivo copiado
+# - Cambiar test_id, title, description
+# - Modificar o añadir preguntas
+# - Ajustar category, difficulty, etc.
+
+# 3. Reiniciar la aplicación
+docker compose down && docker compose up --build
+
+# 4. Verificar en http://localhost:8080
 ```
 
-## 🏗️ Arquitectura del Sistema
+#### Validación Automática
+- ✅ **Categorías flexibles**: Cualquier string es válido
+- ✅ **Formatos múltiples**: El sistema normaliza diferentes estructuras
+- ✅ **Campos opcionales**: Los campos faltantes se completan automáticamente
+- ✅ **Carga automática**: Los tests se cargan desde `tests/*.json` al iniciar
 
-### Componente Único Docker - Test Generator Service
-- **Tecnología**: Python + FastAPI (máxima simplicidad)
-- **Puerto**: 8080
-- **Funciones integradas**:
-  - Servir interfaz web HTML/CSS/JS responsive
-  - API REST para gestión de tests y sesiones
-  - Navegación de preguntas sin validación inmediata
-  - Generación de tests aleatorios
-  - SQLite integrado para estadísticas
-  - Gestión de sesiones de usuario persistentes
+## 🌟 Uso de la Aplicación
 
-### 📁 Estructura de Almacenamiento
-```
-test-generator/
-├── app/                    # Aplicación FastAPI
-│   ├── main.py            # Punto de entrada con todas las rutas
-│   ├── database.py        # Gestión SQLite con aiosqlite
-│   ├── schemas.py         # Modelos Pydantic genéricos
-│   └── config.py          # Configuración de la aplicación
-├── templates/             # Templates HTML móvil-first
-│   ├── base.html         # Template base responsive
-│   ├── index.html        # Página principal con estadísticas
-│   ├── test.html         # Interfaz de realización de tests
-│   └── results.html      # Página de resultados detallados
-├── tests/                 # Tests JSON (montado como volumen)
-├── data/                  # SQLite database (volumen persistente)
-├── docker-compose.yml     # Orquestación ultra-simple
-├── Dockerfile            # Imagen Python ligera
-├── requirements.txt      # Dependencias mínimas
-├── test-template.json    # Template genérico de referencia
-└── test-schema.json      # Schema de validación
-```
+### Página Principal
+- Dashboard con estadísticas generales
+- Lista de tests disponibles
+- Opción para generar tests aleatorios
+- Histórico de sesiones recientes
 
-### 🔄 Flujo de Funcionamiento
-
-#### Añadir Tests
-1. **Crear archivo JSON** siguiendo el template genérico
-2. **Guardar en directorio** `tests/`
-3. **Sistema detecta** automáticamente nuevos tests
-
-#### Realización de Tests
-1. **Usuario accede** a interfaz móvil (puerto 8080)
-2. **Página principal** muestra estadísticas y tests disponibles
-3. **Selección de test** específico o generación aleatoria
-4. **Navegación libre** entre preguntas sin validación inmediata
-5. **Finalización voluntaria** y evaluación completa
-6. **Resultados detallados** con análisis por categorías
-7. **Almacenamiento** en SQLite para histórico
-
-## 📱 Características Móvil-First
-
-### Diseño Responsivo
-- **Breakpoints**: 768px (móvil-tablet), 1024px (tablet-escritorio)
-- **Touch targets**: Mínimo 44px para botones y elementos interactivos
-- **Navegación**: Botones grandes y fáciles de pulsar
-- **Tipografía**: Tamaños escalables y legibles en pantallas pequeñas
-
-### Optimizaciones Táctiles
-- **Feedback visual** en toques y selecciones
-- **Scrolling suave** entre secciones
-- **Carga progresiva** para conexiones móviles lentas
-- **Estado offline** básico para continuar tests iniciados
-
-## 🔧 API Endpoints Principales
-
-### Tests y Sesiones
-```
-GET  /                          # Página principal con estadísticas
-GET  /test/{session_id}         # Interfaz de realización de test
-GET  /results/{session_id}      # Resultados detallados
-
-GET  /api/tests                 # Listar tests disponibles
-POST /api/sessions              # Iniciar nueva sesión (normal o aleatoria)
-GET  /api/sessions/{id}/question/{index}  # Obtener pregunta específica
-POST /api/sessions/{id}/answers # Guardar respuesta
-POST /api/sessions/{id}/complete # Finalizar test
-GET  /api/stats                 # Estadísticas generales
-```
+### Realizando un Test
+1. Seleccionar test desde la página principal
+2. Navegar pregunta por pregunta
+3. Seleccionar respuestas sin prisa
+4. Finalizar cuando estés listo
+5. Revisar resultados detallados
 
 ### Tests Aleatorios
-```json
-POST /api/sessions
-{
-  "test_id": "random",
-  "is_random_test": true,
-  "random_config": {
-    "num_questions": 15,
-    "categories": ["derecho_administrativo", "derecho_civil"],
-    "difficulties": ["medium", "hard"],
-    "exclude_test_ids": ["test_already_taken"],
-    "allow_repeats": false
-  }
-}
-```
+- Combina preguntas de múltiples tests
+- Configura número de preguntas deseadas
+- Filtra por categorías o dificultad
+- Genera variedad en tu práctica
 
-## 🐳 Comandos de Docker
+## 📊 Casos de Uso
 
-```bash
-# Construir y arrancar el servicio
-docker compose up --build -d
+**Preparación de Oposiciones**
+- Administrativo del Estado, Policía, Educación, Sanidad
 
-# Ver logs en tiempo real
-docker compose logs -f test-generator
+**Exámenes Académicos**  
+- Universidad, Formación Profesional, Certificaciones
 
-# Acceso a la aplicación
-curl http://localhost:8080                    # Página principal
-curl http://localhost:8080/docs              # Documentación API automática
-curl http://localhost:8080/api/tests         # Lista de tests via API
-curl http://localhost:8080/api/stats         # Estadísticas generales
+**Formación Corporativa**
+- Compliance, Seguridad laboral, Procesos internos
 
-# Gestión del contenedor
-docker compose ps                            # Estado
-docker compose down                          # Parar
-docker compose down -v && docker compose up --build  # Rebuild completo
-```
+## ⚙️ Configuración
 
-## ⚙️ Variables de Entorno
-
+### Variables de Entorno (Opcional)
 ```env
-# Aplicación
-APP_NAME="Generic Test Generator"
-HOST=0.0.0.0
-PORT=8080
-DEBUG=false
-
-# Rutas (montadas como volúmenes Docker)
-TESTS_DIR=/app/tests
-DATABASE_PATH=/app/data/tests.db
-TEMPLATES_DIR=/app/templates
-
-# Configuración de tests
-DEFAULT_PASSING_GRADE=70
-SESSION_TIMEOUT=3600
-RANDOM_TEST_DEFAULT_QUESTIONS=10
-RANDOM_TEST_MAX_QUESTIONS=20
-
-# UI móvil-first
-MOBILE_BREAKPOINT=768
-TOUCH_BUTTON_MIN_SIZE=44
-DEFAULT_THEME=generic
-
-# Seguridad y rendimiento
-CORS_ENABLED=false
-MAX_CONCURRENT_SESSIONS=50
+PORT=8080                           # Puerto de la aplicación
+DEFAULT_PASSING_GRADE=70           # Nota mínima para aprobar
+RANDOM_TEST_DEFAULT_QUESTIONS=10   # Preguntas por defecto en tests aleatorios
 ```
 
-## 📊 Casos de Uso Genéricos
+### Personalización
+- **Archivos de referencia**: `test-template.json` y `test-schema.json`
+- **Documentación técnica**: Ver `CLAUDE.md` para desarrollo
+- **Seguimiento de tareas**: Ver `TODO.md` para el estado del proyecto
 
-### Preparación de Oposiciones
-- **Administrativo del Estado**: Tests de derecho administrativo, constitucional
-- **Cuerpo Nacional de Policía**: Legislación, procedimientos policiales
-- **Educación**: Pedagogía, normativa educativa, temarios específicos
-- **Sanidad**: Legislación sanitaria, protocolos clínicos
+## 📞 Soporte
 
-### Exámenes Académicos
-- **Universidad**: Tests de repaso por asignaturas
-- **Formación Profesional**: Tests de módulos específicos
-- **Certificaciones**: Preparación para certificaciones profesionales
-
-### Formación Corporativa
-- **Compliance**: Tests de cumplimiento normativo
-- **Seguridad laboral**: Protocolos y procedimientos
-- **Procesos internos**: Formación en metodologías empresariales
-
-## 🔧 Desarrollo y Personalización
-
-### Creación de Tests
-1. Seguir el **template JSON genérico** para máxima compatibilidad
-2. Validar con **test-schema.json** antes de usar
-3. Guardar en directorio `tests/` con nomenclatura estándar
-4. El sistema detectará automáticamente los nuevos tests
-
-### Personalización Visual
-- **CSS responsivo** en `templates/base.html`
-- **Variables CSS** para cambiar colores y tipografías fácilmente
-- **Themes configurables** via variables de entorno
-- **Logos y branding** intercambiables
-
-### Extensibilidad
-- **API REST completa** para integraciones externas
-- **Base de datos SQLite** fácilmente migrable
-- **Formato JSON** compatible con otras herramientas
-- **Docker** para despliegue en cualquier entorno
-
-## 🚀 Estado del Desarrollo
-
-### ✅ Completado
-- [x] Estructura base de la aplicación FastAPI
-- [x] Base de datos SQLite con gestión completa de sesiones
-- [x] Templates HTML móvil-first responsivos
-- [x] Sistema de navegación sin validación inmediata  
-- [x] Generación de tests aleatorios
-- [x] API REST completa
-- [x] Template y schema JSON genéricos
-- [x] Dockerización ultra-simple
-- [x] Documentación actualizada para uso genérico
-
-### 📈 Próximas Mejoras
-- [ ] Panel de administración web para gestión de tests
-- [ ] Sistema de backup automático
-- [ ] Múltiples temas visuales personalizables  
-- [ ] Exportación de resultados (PDF, CSV)
-- [ ] Estadísticas avanzadas con gráficos
-- [ ] Modo offline básico para móviles
-
-## 📚 Archivos de Referencia
-
-### Templates y Esquemas
-- **`test-template.json`**: ⭐ Template genérico completo para cualquier temario
-- **`test-schema.json`**: Schema de validación JSON universal
-- **`tests/`**: Directorio para archivos JSON de tests
-- **`storage-structure.md`**: Documentación completa de almacenamiento
-
-### Código Fuente Principal
-- **`app/main.py`**: Aplicación FastAPI completa con todas las rutas
-- **`app/database.py`**: Gestión SQLite con soporte completo para sesiones
-- **`app/schemas.py`**: Modelos Pydantic genéricos y flexibles
-- **`templates/base.html`**: Template HTML base móvil-first
-- **`docker-compose.yml`**: Orquestación ultra-simple de un solo servicio
+Para problemas técnicos o preguntas sobre desarrollo:
+- Consulta `CLAUDE.md` para guía técnica detallada
+- Revisa `TODO.md` para el estado actual del proyecto
+- Los logs están disponibles con: `docker compose logs -f`
 
 ---
 

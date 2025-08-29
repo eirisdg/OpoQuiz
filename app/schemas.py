@@ -14,18 +14,8 @@ class DifficultyLevel(str, Enum):
     MIXED = "mixed"
 
 
-class CategoryType(str, Enum):
-    """Test categories - Generic for any subject."""
-    GENERAL = "general"
-    TEMA_1 = "tema_1"
-    TEMA_2 = "tema_2" 
-    TEMA_3 = "tema_3"
-    DERECHO_ADMINISTRATIVO = "derecho_administrativo"
-    DERECHO_CONSTITUCIONAL = "derecho_constitucional"
-    LEGISLACION = "legislacion"
-    PROCEDIMIENTOS = "procedimientos"
-    TEORIA = "teoria"
-    PRACTICA = "practica"
+# Flexible category type - allows any string for maximum flexibility
+CategoryType = str
 
 
 class TestStatus(str, Enum):
@@ -35,7 +25,7 @@ class TestStatus(str, Enum):
     ABANDONED = "abandoned"
 
 
-# Test Question Schemas
+# Question Bank Schemas (NEW)
 class SourceInfo(BaseModel):
     """Source information for a question."""
     document: str
@@ -44,8 +34,31 @@ class SourceInfo(BaseModel):
     legal_reference: Optional[str] = None
 
 
+class QuestionBankData(BaseModel):
+    """Individual question data in a question bank."""
+    id: str  # Changed to string for more flexible IDs
+    question: str
+    options: List[str] = Field(..., min_items=4, max_items=4)
+    correct_answer: int = Field(..., ge=0, le=3)
+    explanation: Optional[str] = None
+    source_info: Optional[SourceInfo] = None
+    difficulty: DifficultyLevel
+    category: CategoryType
+    keywords: List[str] = []
+    estimated_time_seconds: int = Field(default=90, ge=30, le=300)
+
+
+class QuestionBankSchema(BaseModel):
+    """Question bank schema for JSON files."""
+    bank_id: str
+    title: str
+    description: Optional[str] = None
+    questions: List[QuestionBankData]
+
+
+# Legacy Question Data (for backward compatibility)
 class QuestionData(BaseModel):
-    """Individual question data."""
+    """Individual question data (legacy format)."""
     id: int
     question: str
     options: List[str] = Field(..., min_items=4, max_items=4)
@@ -56,6 +69,7 @@ class QuestionData(BaseModel):
     category: CategoryType
     keywords: List[str] = []
     points: int = Field(default=1, ge=1, le=5)
+    estimated_time_seconds: int = Field(default=90, ge=30, le=300)
 
 
 class TestMetadata(BaseModel):
@@ -90,12 +104,16 @@ class TestSchema(BaseModel):
     test_id: str
     title: str
     description: Optional[str] = None
-    created_at: datetime
-    category: CategoryType
-    difficulty: DifficultyLevel
-    estimated_duration: int
+    created_at: Optional[datetime] = None
+    created_date: Optional[str] = None  # Alternative format
+    category: Optional[CategoryType] = "general"
+    difficulty: Optional[DifficultyLevel] = "mixed"
+    estimated_duration: Optional[int] = None
+    time_limit_minutes: Optional[int] = None  # Alternative format
     instructions: Optional[str] = None
-    passing_grade: int = 70
+    passing_grade: Optional[int] = 70
+    passing_score: Optional[int] = None  # Alternative format
+    total_questions: Optional[int] = None  # Alternative format
     questions: List[QuestionData]
     scoring: Dict[str, Any] = {}
     statistics: Dict[str, Any] = {}
@@ -169,6 +187,7 @@ class AnswerDetail(BaseModel):
     selected_option: str
     correct_option: str
     explanation: Optional[str] = None
+    source_info: Optional[SourceInfo] = None
     points_earned: int
     time_spent_seconds: Optional[int] = None
 
@@ -197,6 +216,59 @@ class TestResultsResponse(BaseModel):
     detailed_answers: List[AnswerDetail]
 
 
+# Dynamic Test Generation Schemas (NEW)
+class TestGenerationType(str, Enum):
+    """Types of dynamic test generation."""
+    RANDOM = "random"
+    CATEGORY = "category"
+    DIFFICULTY = "difficulty"
+    FAILED_QUESTIONS = "failed_questions"
+
+
+class DynamicTestRequest(BaseModel):
+    """Request to create a dynamic test."""
+    test_type: TestGenerationType
+    num_questions: int = Field(default=50, ge=5, le=100)
+    title: Optional[str] = None
+    
+    # Category-based test
+    categories: Optional[List[str]] = None
+    
+    # Difficulty-based test
+    difficulty: Optional[DifficultyLevel] = None
+    
+    # Failed questions test
+    source_session_id: Optional[str] = None
+    
+    # General options
+    user_ip: Optional[str] = None
+
+
+class DynamicTestResponse(BaseModel):
+    """Response for dynamic test creation."""
+    test_id: str
+    test_type: str
+    title: str
+    num_questions: int
+    estimated_duration_minutes: int
+    session_id: str
+
+
+class CategoryOption(BaseModel):
+    """Available category for selection."""
+    category: str
+    question_count: int
+    
+
+class TestConfigurationResponse(BaseModel):
+    """Response with available test configuration options."""
+    available_categories: List[CategoryOption]
+    available_difficulties: List[Dict[str, Any]]
+    total_questions: int
+    has_failed_questions: bool
+
+
+# Legacy Random Test Config (for backward compatibility)
 class RandomTestConfig(BaseModel):
     """Configuration for random test generation."""
     num_questions: int = Field(default=10, ge=5, le=50)
@@ -204,6 +276,9 @@ class RandomTestConfig(BaseModel):
     difficulties: Optional[List[DifficultyLevel]] = None
     exclude_test_ids: List[str] = []
     allow_repeats: bool = False
+    # New fields for failed questions test
+    source_session_id: Optional[str] = None
+    failed_questions_only: bool = False
 
 
 class RandomTestResponse(BaseModel):

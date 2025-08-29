@@ -8,11 +8,6 @@
     {{ "%.0f"|format(results.percentage) }}% de aciertos
 {% endblock %}
 
-{% block extra_nav %}
-<a href="/" class="nav-link">
-    🏠 Nuevo Test
-</a>
-{% endblock %}
 
 {% block content %}
     <!-- Overall Results -->
@@ -160,6 +155,18 @@
                 </div>
                 {% endif %}
                 
+                {% if answer.source_info %}
+                <div class="source-info">
+                    <strong>Fuente:</strong> 
+                    {{ answer.source_info.document }}
+                    {% if answer.source_info.section %} - {{ answer.source_info.section }}{% endif %}
+                    {% if answer.source_info.page %} (Pág. {{ answer.source_info.page }}){% endif %}
+                    {% if answer.source_info.legal_reference %}
+                        <br><small>Referencia legal: {{ answer.source_info.legal_reference }}</small>
+                    {% endif %}
+                </div>
+                {% endif %}
+                
                 {% if answer.time_spent_seconds %}
                 <div class="time-spent">
                     <small>Tiempo: {{ answer.time_spent_seconds }}s</small>
@@ -172,8 +179,16 @@
 
     <!-- Session Info -->
     <div class="session-info">
-        <p class="text-muted">Test completado el {{ results.completed_at.strftime('%d/%m/%Y a las %H:%M') }}</p>
+        <p class="text-muted">Test completado el {{ results.completed_at if results.completed_at else 'Fecha no disponible' }}</p>
         <p class="text-muted">ID de sesión: {{ results.session_id }}</p>
+    </div>
+
+    <!-- Hidden data for JavaScript -->
+    <div id="resultData" style="display: none;" 
+         data-percentage="{{ results.percentage }}" 
+         data-score="{{ results.score }}" 
+         data-total="{{ results.total_questions }}" 
+         data-duration="{{ (results.duration_seconds // 60) }}">
     </div>
 
 {% endblock %}
@@ -382,6 +397,22 @@
         line-height: 1.4;
     }
     
+    .source-info {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        padding: 10px;
+        border-radius: 6px;
+        margin: 12px 0;
+        font-size: 13px;
+        line-height: 1.4;
+        color: #495057;
+    }
+    
+    .source-info small {
+        color: #6c757d;
+        font-style: italic;
+    }
+    
     .time-spent {
         text-align: right;
         color: #6c757d;
@@ -441,22 +472,29 @@
     // Show/hide detailed results
     function showDetailedResults() {
         const detailedResults = document.getElementById('detailedResults');
-        const button = event.target;
+        const button = document.querySelector('button[onclick="showDetailedResults()"]');
         
-        if (detailedResults.style.display === 'none') {
+        if (detailedResults && detailedResults.style.display === 'none') {
             detailedResults.style.display = 'block';
-            button.textContent = '📊 Ocultar Respuestas Detalladas';
+            if (button) button.textContent = '📊 Ocultar Respuestas Detalladas';
             detailedResults.scrollIntoView({ behavior: 'smooth' });
-        } else {
+        } else if (detailedResults) {
             detailedResults.style.display = 'none';
-            button.textContent = '📊 Ver Respuestas Detalladas';
+            if (button) button.textContent = '📊 Ver Respuestas Detalladas';
         }
     }
     
     // Share results
     function shareResults() {
-        const text = `¡He completado un test de Seguridad Social con un {{ "%.0f"|format(results.percentage) }}%! ` +
-                    `{{ results.score }}/{{ results.total_questions }} correctas en {{ (results.duration_seconds // 60) }} minutos.`;
+        const resultData = document.getElementById('resultData');
+        if (!resultData) return;
+        
+        const percentage = Math.round(parseFloat(resultData.dataset.percentage || 0));
+        const score = resultData.dataset.score || 0;
+        const total = resultData.dataset.total || 0;
+        const duration = resultData.dataset.duration || 0;
+        
+        const text = '¡He completado un test con un ' + percentage + '%! ' + score + '/' + total + ' correctas en ' + duration + ' minutos.';
         
         if (navigator.share) {
             navigator.share({
@@ -483,18 +521,7 @@
     // Show temporary message
     function showTemporaryMessage(message) {
         const messageEl = document.createElement('div');
-        messageEl.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--success-color);
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 1000;
-            font-weight: 500;
-        `;
+        messageEl.style.cssText = 'position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: var(--success-color); color: white; padding: 12px 20px; border-radius: 8px; z-index: 1000; font-weight: 500;';
         messageEl.textContent = message;
         document.body.appendChild(messageEl);
         

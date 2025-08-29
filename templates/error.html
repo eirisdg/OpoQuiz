@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Error - Test Generator{% endblock %}
+
+{% block header_title %}Error{% endblock %}
+{% block header_subtitle %}Se ha producido un error{% endblock %}
+
+{% block content %}
+    <div class="card error-card">
+        <div class="card-header">
+            <h2 class="card-title">⚠️ Error</h2>
+            <p class="card-subtitle">{{ error if error else 'Se ha producido un error inesperado' }}</p>
+        </div>
+        <div class="card-body">
+            {% if detail %}
+            <p class="error-detail">{{ detail }}</p>
+            {% endif %}
+            
+            <div class="error-actions">
+                <a href="/" class="btn">🏠 Volver al Inicio</a>
+                <button class="btn btn-outline" onclick="window.location.reload()">🔄 Recargar</button>
+            </div>
+        </div>
+    </div>
+    
+    <style>
+        .error-card {
+            border-color: #e74c3c;
+        }
+        
+        .error-card .card-title {
+            color: #e74c3c;
+        }
+        
+        .error-detail {
+            background: #fdf2f2;
+            color: #721c24;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .error-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        
+        .error-actions .btn {
+            flex: 1;
+        }
+    </style>
+{% endblock %}

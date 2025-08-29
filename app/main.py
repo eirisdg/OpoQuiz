@@ -1,9 +1,9 @@
 """FastAPI Test Generator - Main Application."""
 
-from fastapi import FastAPI, Request, HTTPException, Depends
+from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -39,9 +39,12 @@ async def lifespan(app: FastAPI):
     # Validate test files
     test_files = validate_test_files()
     
-    # Load tests into memory for faster access
-    app.state.tests_cache = await load_all_tests()
-    print(f"📚 Loaded {len(app.state.tests_cache)} tests into cache")
+    # Load question banks into database
+    banks_loaded = await load_question_banks()
+    print(f"📚 Loaded {banks_loaded} question banks into database")
+    
+    # Initialize empty cache for backward compatibility
+    app.state.tests_cache = {}
     
     yield
     
@@ -85,25 +88,93 @@ app, templates = create_app()
 
 
 # Utility Functions
-async def load_all_tests() -> Dict[str, TestSchema]:
-    """Load all test files into memory cache."""
-    tests_cache = {}
+def normalize_test_data(test_data: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize test data to handle different JSON formats."""
+    normalized = test_data.copy()
+    
+    # Handle created_date -> created_at
+    if 'created_date' in normalized and 'created_at' not in normalized:
+        created_date = normalized['created_date']
+        # Convert YYYY-MM-DD to ISO datetime
+        if isinstance(created_date, str) and len(created_date) == 10:
+            normalized['created_at'] = f"{created_date}T00:00:00Z"
+    
+    # Handle time_limit_minutes -> estimated_duration
+    if 'time_limit_minutes' in normalized and 'estimated_duration' not in normalized:
+        normalized['estimated_duration'] = normalized['time_limit_minutes']
+    
+    # Handle passing_score -> passing_grade
+    if 'passing_score' in normalized and 'passing_grade' not in normalized:
+        total_questions = normalized.get('total_questions', len(normalized.get('questions', [])))
+        if total_questions > 0:
+            # Convert absolute score to percentage
+            normalized['passing_grade'] = int((normalized['passing_score'] / total_questions) * 100)
+    
+    # Set defaults for missing required fields
+    if 'category' not in normalized:
+        normalized['category'] = 'general'
+    if 'difficulty' not in normalized:
+        normalized['difficulty'] = 'mixed'
+    if 'estimated_duration' not in normalized:
+        total_questions = len(normalized.get('questions', []))
+        # Estimate 1.5 minutes per question
+        normalized['estimated_duration'] = max(10, int(total_questions * 1.5))
+    
+    return normalized
+
+
+async def load_question_banks() -> int:
+    """Load all question bank files into database."""
+    from app.schemas import QuestionBankSchema
     
     if not os.path.exists(settings.tests_dir):
-        return tests_cache
+        return 0
+    
+    db_manager = await get_db_manager()
+    banks_loaded = 0
     
     for filename in os.listdir(settings.tests_dir):
-        if filename.endswith('.json'):
-            test_path = os.path.join(settings.tests_dir, filename)
+        if filename.endswith('.json') and filename.startswith('bank_'):
+            file_path = os.path.join(settings.tests_dir, filename)
             try:
-                with open(test_path, 'r', encoding='utf-8') as f:
-                    test_data = json.load(f)
-                    test_schema = TestSchema(**test_data)
-                    tests_cache[test_schema.test_id] = test_schema
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    bank_data = json.load(f)
+                    bank_schema = QuestionBankSchema(**bank_data)
+                    
+                    # Prepare data for database
+                    bank_data_for_db = {
+                        'bank_id': bank_schema.bank_id,
+                        'title': bank_schema.title,
+                        'description': bank_schema.description,
+                        'file_path': file_path,
+                        'questions': []
+                    }
+                    
+                    # Convert questions
+                    for question in bank_schema.questions:
+                        question_data = {
+                            'id': question.id,
+                            'question': question.question,
+                            'options': question.options,
+                            'correct_answer': question.correct_answer,
+                            'explanation': question.explanation,
+                            'difficulty': question.difficulty,
+                            'category': question.category,
+                            'keywords': question.keywords,
+                            'estimated_time_seconds': question.estimated_time_seconds,
+                            'source_info': question.source_info.dict() if question.source_info else {}
+                        }
+                        bank_data_for_db['questions'].append(question_data)
+                    
+                    await db_manager.load_question_bank(bank_data_for_db)
+                    banks_loaded += 1
+                    print(f"📚 Loaded question bank: {bank_schema.title} ({len(bank_schema.questions)} questions)")
+                    
             except Exception as e:
-                print(f"⚠️ Failed to load test {filename}: {e}")
+                print(f"Error loading question bank {filename}: {e}")
+                continue
     
-    return tests_cache
+    return banks_loaded
 
 
 def get_client_ip(request: Request) -> str:
@@ -125,31 +196,22 @@ async def home_page(
     request: Request,
     db: DatabaseManager = Depends(get_db_manager)
 ):
-    """Home page with statistics and test selection."""
+    """Home page with question bank statistics and test generation options."""
     try:
         # Get general statistics
         stats_data = await db.get_general_stats()
         
-        # Add total tests count to stats
-        stats_data['total_tests_available'] = len(app.state.tests_cache)
+        # Get question bank statistics
+        question_stats = await db.get_question_stats()
+        stats_data.update(question_stats)
         
-        # Get available tests
-        available_tests = []
-        for test_id, test_schema in app.state.tests_cache.items():
-            available_tests.append({
-                "test_id": test_id,
-                "title": test_schema.title,
-                "description": test_schema.description,
-                "category": test_schema.category,
-                "difficulty": test_schema.difficulty,
-                "questions": test_schema.questions,
-                "estimated_duration": test_schema.estimated_duration
-            })
+        # Get available categories for test generation
+        available_categories = await db.get_available_categories()
         
         return templates.TemplateResponse("index.html", {
             "request": request,
             "stats": stats_data,
-            "available_tests": available_tests,
+            "available_categories": available_categories,
             "app_name": settings.app_name,
             "app_version": settings.app_version
         })
@@ -161,6 +223,170 @@ async def home_page(
             "error": "Error loading application data",
             "detail": str(e)
         })
+
+
+# Admin Panel Routes
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_panel(
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Admin panel for question bank management."""
+    try:
+        # Get question bank statistics
+        question_stats = await db.get_question_stats()
+        
+        # Get list of question banks
+        async with db.get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT bank_id, title, description, questions_count, loaded_at, last_updated 
+                FROM question_banks ORDER BY last_updated DESC
+            """)
+            banks = await cursor.fetchall()
+        
+        bank_list = []
+        for bank in banks:
+            bank_list.append({
+                'bank_id': bank[0],
+                'title': bank[1], 
+                'description': bank[2],
+                'questions_count': bank[3],
+                'loaded_at': bank[4],
+                'last_updated': bank[5]
+            })
+        
+        return templates.TemplateResponse("admin.html", {
+            "request": request,
+            "stats": question_stats,
+            "banks": bank_list,
+            "app_name": settings.app_name
+        })
+        
+    except Exception as e:
+        print(f"Error in admin_panel: {e}")
+        return templates.TemplateResponse("error.html", {
+            "request": request,
+            "error": "Error loading admin panel",
+            "detail": str(e)
+        })
+
+
+@app.post("/admin/upload")
+async def upload_question_bank(
+    request: Request,
+    file: UploadFile = File(...),
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Upload and load a new question bank file."""
+    try:
+        # Validate file
+        if not file.filename.endswith('.json'):
+            raise HTTPException(status_code=400, detail="Only JSON files are allowed")
+        
+        if not file.filename.startswith('bank_'):
+            raise HTTPException(status_code=400, detail="File name must start with 'bank_'")
+        
+        # Read file content
+        content = await file.read()
+        
+        # Validate JSON structure
+        try:
+            bank_data = json.loads(content.decode('utf-8'))
+        except json.JSONDecodeError as e:
+            raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+        
+        # Validate against schema
+        from app.schemas import QuestionBankSchema
+        try:
+            bank_schema = QuestionBankSchema(**bank_data)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid question bank format: {str(e)}")
+        
+        # Save file to tests directory
+        file_path = os.path.join(settings.tests_dir, file.filename)
+        with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content.decode('utf-8'))
+        
+        # Load into database
+        bank_data_for_db = {
+            'bank_id': bank_schema.bank_id,
+            'title': bank_schema.title,
+            'description': bank_schema.description,
+            'file_path': file_path,
+            'questions': []
+        }
+        
+        # Convert questions
+        for question in bank_schema.questions:
+            question_data = {
+                'id': question.id,
+                'question': question.question,
+                'options': question.options,
+                'correct_answer': question.correct_answer,
+                'explanation': question.explanation,
+                'difficulty': question.difficulty,
+                'category': question.category,
+                'keywords': question.keywords,
+                'estimated_time_seconds': question.estimated_time_seconds,
+                'source_info': question.source_info.dict() if question.source_info else {}
+            }
+            bank_data_for_db['questions'].append(question_data)
+        
+        questions_loaded = await db.load_question_bank(bank_data_for_db)
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Successfully loaded {questions_loaded} questions from {bank_schema.title}",
+            "bank_id": bank_schema.bank_id,
+            "questions_count": questions_loaded
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in upload_question_bank: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing upload: {str(e)}")
+
+
+@app.delete("/admin/bank/{bank_id}")
+async def delete_question_bank(
+    bank_id: str,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Delete a question bank and its questions."""
+    try:
+        async with db.get_connection() as conn:
+            # Get bank info including file path
+            cursor = await conn.execute("SELECT file_path FROM question_banks WHERE bank_id = ?", (bank_id,))
+            bank = await cursor.fetchone()
+            
+            if not bank:
+                raise HTTPException(status_code=404, detail="Question bank not found")
+            
+            file_path = bank[0]
+            
+            # Delete questions from database
+            await conn.execute("DELETE FROM questions WHERE bank_id = ?", (bank_id,))
+            
+            # Delete bank metadata
+            await conn.execute("DELETE FROM question_banks WHERE bank_id = ?", (bank_id,))
+            
+            await conn.commit()
+            
+            # Delete file if it exists
+            if file_path and os.path.exists(file_path):
+                os.remove(file_path)
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Successfully deleted question bank {bank_id}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in delete_question_bank: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting bank: {str(e)}")
 
 
 @app.get("/test/{session_id}", response_class=HTMLResponse)
@@ -249,7 +475,7 @@ async def test_question_page(
             "total_questions": len(test_schema.questions),
             "selected_answer": selected_answer,
             "answered_questions": answered_questions,
-            "session_start_time": session_data['started_at'].isoformat() if session_data.get('started_at') else None
+            "session_start_time": session_data.get('started_at')
         })
         
     except HTTPException:
@@ -294,6 +520,7 @@ async def results_page(
                         'selected_option': question.options[answer['selected_answer']] if answer['selected_answer'] is not None else "Sin responder",
                         'correct_option': question.options[answer['correct_answer']],
                         'explanation': getattr(question, 'explanation', None),
+                        'source_info': getattr(question, 'source_info', None),
                         'points_earned': answer['points_earned'],
                         'time_spent_seconds': answer['time_spent_seconds']
                     })
@@ -396,8 +623,8 @@ async def start_session(
     test_id = request_data.test_id
     
     # Handle random test generation
-    if test_id == 'random' or request_data.is_random_test:
-        test_schema = generate_random_test(request_data.random_config or {})
+    if test_id == 'random' or test_id == 'failed_questions' or request_data.is_random_test:
+        test_schema = await generate_random_test(request_data.random_config or {})
         test_id = test_schema.test_id
         # Store in cache temporarily
         app.state.tests_cache[test_id] = test_schema
@@ -567,6 +794,7 @@ async def complete_test(
             selected_option=question.options[selected_answer] if selected_answer is not None else "No respondida",
             correct_option=question.options[question.correct_answer],
             explanation=question.explanation,
+            source_info=question.source_info,
             points_earned=question_points,
             time_spent_seconds=user_answer_data.get('time_spent_seconds', 0)
         ))
@@ -662,6 +890,176 @@ async def get_stats(db: DatabaseManager = Depends(get_db_manager)):
     )
 
 
+@app.get("/api/categories")
+async def get_available_categories(db: DatabaseManager = Depends(get_db_manager)):
+    """Get list of available categories."""
+    try:
+        categories = await db.get_available_categories()
+        return categories
+    except Exception as e:
+        print(f"Error getting categories: {e}")
+        raise HTTPException(status_code=500, detail="Error getting categories")
+
+
+# Dynamic Test Generation API Endpoints
+@app.get("/api/test-config")
+async def get_test_configuration(
+    request: Request,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Get available test configuration options."""
+    try:
+        # Get available categories
+        categories = await db.get_available_categories()
+        
+        # Get question statistics  
+        question_stats = await db.get_question_stats()
+        
+        # Check if user has failed questions
+        user_ip = get_client_ip(request)
+        failed_questions = await db.get_failed_questions(user_ip, 1)
+        
+        return {
+            "available_categories": [
+                {"category": cat, "question_count": question_stats.get("category_distribution", {}).get(cat, 0)}
+                for cat in categories
+            ],
+            "available_difficulties": [
+                {"difficulty": "easy", "question_count": question_stats.get("difficulty_distribution", {}).get("easy", 0)},
+                {"difficulty": "medium", "question_count": question_stats.get("difficulty_distribution", {}).get("medium", 0)},
+                {"difficulty": "hard", "question_count": question_stats.get("difficulty_distribution", {}).get("hard", 0)},
+                {"difficulty": "mixed", "question_count": question_stats.get("total_questions", 0)}
+            ],
+            "total_questions": question_stats.get("total_questions", 0),
+            "has_failed_questions": len(failed_questions) > 0
+        }
+    except Exception as e:
+        print(f"Error in get_test_configuration: {e}")
+        raise HTTPException(status_code=500, detail="Error getting test configuration")
+
+
+@app.post("/api/generate-test")
+async def generate_dynamic_test(
+    request: Request,
+    test_request: dict,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Generate a dynamic test based on specified criteria."""
+    try:
+        from app.schemas import TestGenerationType
+        
+        user_ip = get_client_ip(request)
+        test_type = test_request.get("test_type", "random")
+        num_questions = test_request.get("num_questions", 50)
+        
+        # Validate request
+        if num_questions < 5 or num_questions > 100:
+            raise HTTPException(status_code=400, detail="Number of questions must be between 5 and 100")
+        
+        # Build criteria based on test type
+        criteria = {}
+        test_title = ""
+        
+        if test_type == "random":
+            test_title = f"Test Aleatorio - {num_questions} preguntas"
+            criteria = {}
+            
+        elif test_type == "category":
+            config = test_request.get("config", {})
+            categories = config.get("categories", [])
+            if not categories:
+                raise HTTPException(status_code=400, detail="At least one category must be selected")
+            criteria = {"categories": categories}
+            test_title = f"Test por Categorías - {num_questions} preguntas"
+            
+        elif test_type == "difficulty":
+            config = test_request.get("config", {})
+            difficulty = config.get("difficulty", "medium")
+            criteria = {"difficulty": difficulty}
+            test_title = f"Test {difficulty.title()} - {num_questions} preguntas"
+            
+        elif test_type == "failed_questions":
+            config = test_request.get("config", {})
+            source_session_id = config.get("source_session_id")
+            if not source_session_id:
+                # Get failed questions for this user
+                failed_questions = await db.get_failed_questions(user_ip, num_questions)
+                if not failed_questions:
+                    raise HTTPException(status_code=400, detail="No failed questions found for this user")
+                question_ids = [q['question_id'] for q in failed_questions]
+                criteria = {"question_ids": question_ids}
+                test_title = f"Repaso de Errores - {len(question_ids)} preguntas"
+            else:
+                raise HTTPException(status_code=400, detail="Session-specific failed questions not yet implemented")
+        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid test type")
+        
+        # Get questions based on criteria
+        if test_type == "failed_questions" and 'question_ids' in locals():
+            # Use specific failed questions
+            questions = await db.get_failed_questions(user_ip, num_questions)
+        else:
+            # Get questions by criteria with anti-repetition
+            questions = await db.get_questions_by_criteria(criteria, user_ip, num_questions)
+        
+        if not questions:
+            raise HTTPException(status_code=400, detail="No questions available matching the specified criteria")
+        
+        if len(questions) < num_questions:
+            num_questions = len(questions)
+        
+        # Calculate estimated duration based on question times
+        estimated_duration_seconds = sum(q.get('estimated_time_seconds', 90) for q in questions)
+        estimated_duration_minutes = round(estimated_duration_seconds / 60)
+        
+        # Generate test ID
+        test_id = f"dyn_{test_type}_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
+        
+        # Save dynamic test
+        await db.save_dynamic_test({
+            'test_id': test_id,
+            'test_type': test_type,
+            'test_title': test_title,
+            'criteria': criteria,
+            'question_ids': [q['question_id'] for q in questions],
+            'user_ip': user_ip
+        })
+        
+        # Create session for this test
+        session_id = generate_session_id()
+        
+        await db.create_session({
+            'session_id': session_id,
+            'test_id': test_id,
+            'test_title': test_title,
+            'user_ip': user_ip,
+            'started_at': datetime.now().isoformat(),
+            'total_questions': num_questions,
+            'is_dynamic_test': True,
+            'test_type': test_type,
+            'question_ids': [q['question_id'] for q in questions]
+        })
+        
+        return {
+            "test_id": test_id,
+            "session_id": session_id,
+            "test_type": test_type,
+            "title": test_title,
+            "num_questions": num_questions,
+            "estimated_duration_minutes": estimated_duration_minutes
+        }
+        
+    except HTTPException as e:
+        # Re-raise HTTPExceptions without modification
+        raise e
+    except Exception as e:
+        import traceback
+        print(f"Error in generate_dynamic_test: {e}")
+        print(f"Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error generating test: {str(e)}")
+
+
 @app.get("/health", response_model=HealthResponse)
 async def health_check(db: DatabaseManager = Depends(get_db_manager)):
     """Health check endpoint."""
@@ -701,7 +1099,47 @@ def get_client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-def generate_random_test(config: Dict[str, Any]) -> TestSchema:
+async def get_failed_questions_from_session(session_id: str) -> List[QuestionData]:
+    """Get failed questions from a specific session."""
+    from app.database import get_db_manager
+    
+    db = await get_db_manager()
+    
+    try:
+        # Get session data
+        session_data = await db.get_session(session_id)
+        if not session_data:
+            return []
+        
+        # Get session answers - only the incorrect ones
+        answers = await db.get_session_answers(session_id)
+        failed_question_ids = [answer['question_id'] for answer in answers if not answer['is_correct']]
+        
+        if not failed_question_ids:
+            return []
+        
+        # Get the original test to retrieve the failed questions
+        test_schema = app.state.tests_cache.get(session_data['test_id'])
+        if not test_schema:
+            return []
+        
+        # Extract failed questions
+        failed_questions = []
+        for question in test_schema.questions:
+            if question.id in failed_question_ids:
+                # Create a copy to avoid modifying the original
+                import copy
+                failed_question = copy.deepcopy(question)
+                failed_questions.append(failed_question)
+        
+        return failed_questions
+        
+    except Exception as e:
+        print(f"Error getting failed questions from session {session_id}: {e}")
+        return []
+
+
+async def generate_random_test(config: Dict[str, Any]) -> TestSchema:
     """Generate a random test from existing questions."""
     import random
     from datetime import datetime
@@ -712,31 +1150,41 @@ def generate_random_test(config: Dict[str, Any]) -> TestSchema:
     difficulties = config.get('difficulties', [])
     exclude_test_ids = config.get('exclude_test_ids', [])
     allow_repeats = config.get('allow_repeats', False)
+    source_session_id = config.get('source_session_id')
+    failed_questions_only = config.get('failed_questions_only', False)
     
     # Collect all available questions
     all_questions = []
     source_test_ids = []
     
-    for test_id, test_schema in app.state.tests_cache.items():
-        if test_id in exclude_test_ids:
-            continue
+    # Special case: Generate test with failed questions from a specific session
+    if failed_questions_only and source_session_id:
+        all_questions = await get_failed_questions_from_session(source_session_id)
+        if not all_questions:
+            raise HTTPException(status_code=400, detail="No hay preguntas falladas en la sesión especificada o la sesión no existe")
+        source_test_ids = [f"session_{source_session_id}"]
+    else:
+        # Regular random test generation
+        for test_id, test_schema in app.state.tests_cache.items():
+            if test_id in exclude_test_ids:
+                continue
+                
+            source_test_ids.append(test_id)
             
-        source_test_ids.append(test_id)
-        
-        for question in test_schema.questions:
-            # Filter by category if specified
-            if categories:
-                question_category = question.category.value if hasattr(question.category, 'value') else str(question.category)
-                if question_category not in categories:
-                    continue
-            
-            # Filter by difficulty if specified
-            if difficulties:
-                question_difficulty = question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty)
-                if question_difficulty not in difficulties:
-                    continue
-            
-            all_questions.append(question)
+            for question in test_schema.questions:
+                # Filter by category if specified
+                if categories:
+                    question_category = question.category.value if hasattr(question.category, 'value') else str(question.category)
+                    if question_category not in categories:
+                        continue
+                
+                # Filter by difficulty if specified
+                if difficulties:
+                    question_difficulty = question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty)
+                    if question_difficulty not in difficulties:
+                        continue
+                
+                all_questions.append(question)
     
     if len(all_questions) < num_questions:
         num_questions = len(all_questions)
@@ -757,14 +1205,22 @@ def generate_random_test(config: Dict[str, Any]) -> TestSchema:
     # Generate random test ID
     test_id = f"random_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{uuid.uuid4().hex[:8]}"
     
+    # Set title and description based on test type
+    if failed_questions_only:
+        title = f"Repaso de Errores ({num_questions} preguntas)"
+        description = f"Test de repaso con preguntas falladas de la sesión {source_session_id}"
+    else:
+        title = f"Test Aleatorio ({num_questions} preguntas)"
+        description = "Test generado aleatoriamente a partir de preguntas existentes"
+    
     # Create test schema
     random_test = TestSchema(
         test_id=test_id,
-        title=f"Test Aleatorio ({num_questions} preguntas)",
-        description="Test generado aleatoriamente a partir de preguntas existentes",
+        title=title,
+        description=description,
         created_at=datetime.now(),
-        category=CategoryType.GENERAL,
-        difficulty=DifficultyLevel.MIXED,
+        category="general",
+        difficulty="mixed",
         estimated_duration=num_questions * 2,  # 2 minutes per question
         instructions="Responde todas las preguntas. Se evaluará al finalizar el test.",
         passing_grade=settings.default_passing_grade,
