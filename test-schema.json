@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Banco de Preguntas",
-  "description": "Estructura JSON para bancos de preguntas que se cargan dinámicamente en la base de datos para generar tests",
+  "description": "Estructura JSON para bancos de preguntas que se cargan dinámicamente en la base de datos para generar tests con sistema anti-repetición e interfaz limpia",
   "type": "object",
   "required": ["bank_id", "title", "questions"],
   "properties": {
@@ -47,12 +47,47 @@
         "generated_by": {
           "type": "string",
           "default": "Claude Code",
-          "description": "Herramienta utilizada para generar el test"
+          "description": "Herramienta utilizada para generar el banco de preguntas"
         },
         "version": {
           "type": "string",
-          "default": "1.0",
-          "description": "Versión del esquema"
+          "default": "2.0",
+          "description": "Versión del esquema (2.0 para sistema dinámico con interfaz limpia)"
+        },
+        "creation_date": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Fecha de creación del banco de preguntas",
+          "example": "2025-08-29T16:22:30Z"
+        },
+        "subject_area": {
+          "type": "string",
+          "description": "Área temática general del banco",
+          "example": "Seguridad Social"
+        },
+        "language": {
+          "type": "string",
+          "default": "es",
+          "description": "Idioma del banco de preguntas"
+        },
+        "difficulty_distribution": {
+          "type": "object",
+          "description": "Distribución de preguntas por dificultad",
+          "properties": {
+            "easy": {"type": "integer", "minimum": 0},
+            "medium": {"type": "integer", "minimum": 0},
+            "hard": {"type": "integer", "minimum": 0}
+          }
+        },
+        "quality_assurance": {
+          "type": "object",
+          "description": "Información sobre revisión de calidad",
+          "properties": {
+            "reviewed": {"type": "boolean", "default": false},
+            "reviewer": {"type": "string"},
+            "review_date": {"type": "string", "format": "date-time"},
+            "notes": {"type": "string"}
+          }
         }
       }
     }
@@ -63,9 +98,10 @@
       "required": ["id", "question", "options", "correct_answer"],
       "properties": {
         "id": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "ID único de la pregunta dentro del test"
+          "type": "string",
+          "minLength": 1,
+          "description": "ID único de la pregunta dentro del banco como string para consistencia con base de datos (question_id TEXT)",
+          "examples": ["1", "q001", "afiliacion_001", "bank_20250829_001_q015"]
         },
         "question": {
           "type": "string",
@@ -92,8 +128,8 @@
         },
         "explanation": {
           "type": "string",
-          "maxLength": 300,
-          "description": "Explicación opcional de por qué es correcta la respuesta"
+          "maxLength": 500,
+          "description": "Explicación opcional de por qué es correcta la respuesta. Se muestra en resultados detallados"
         },
         "source_info": {
           "type": "object",
@@ -121,30 +157,76 @@
         "difficulty": {
           "type": "string",
           "enum": ["easy", "medium", "hard"],
-          "description": "Nivel de dificultad de esta pregunta específica"
+          "description": "Nivel de dificultad de esta pregunta específica. Usado para filtrado en tests por dificultad. No se muestra en interfaz limpia"
         },
         "category": {
           "type": "string",
-          "description": "Categoría temática de la pregunta - cualquier string es válido",
-          "example": "afiliacion"
+          "description": "Categoría temática de la pregunta - cualquier string es válido. Usado para filtrado en tests por categoría. No se muestra en interfaz limpia",
+          "examples": ["afiliacion", "cotizacion", "prestaciones", "procedimientos", "general"]
         },
         "keywords": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "string",
+            "minLength": 2
           },
-          "description": "Palabras clave para filtrado y búsqueda",
-          "example": ["afiliacion", "obligatoria", "única"]
+          "description": "Palabras clave para filtrado avanzado y sistema anti-repetición",
+          "examples": [["afiliacion", "obligatoria", "única"], ["cotizacion", "base", "calculo"]]
         },
         "estimated_time_seconds": {
           "type": "integer",
           "minimum": 30,
           "maximum": 300,
-          "description": "Tiempo estimado para responder la pregunta en segundos",
+          "description": "Tiempo estimado para responder la pregunta en segundos. Usado para calcular duración total del test dinámico",
           "default": 90,
-          "example": 90
+          "examples": [60, 90, 120, 180]
+        },
+        "points": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5,
+          "default": 1,
+          "description": "Puntos que vale la pregunta. En el sistema actual todas valen 1 punto para simplicidad"
+        },
+        "usage_stats": {
+          "type": "object",
+          "description": "Estadísticas de uso para el algoritmo anti-repetición (gestionado automáticamente por el sistema)",
+          "properties": {
+            "times_used": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Número de veces que se ha usado esta pregunta"
+            },
+            "success_rate": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Tasa de aciertos de esta pregunta (0.0 a 1.0)"
+            },
+            "avg_time_seconds": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Tiempo promedio que toma responder esta pregunta"
+            }
+          }
         }
       }
     }
+  },
+  
+  "_schema_notes": {
+    "version": "2.0",
+    "last_updated": "2025-08-29",
+    "changes_from_v1": [
+      "Estandarizado IDs como string para consistencia con base de datos",
+      "Expandidos metadatos para mejor gestión de bancos",
+      "Documentado que category/difficulty no se muestran en interfaz limpia",
+      "Añadido campo points con valor por defecto 1",
+      "Añadido campo usage_stats para sistema anti-repetición",
+      "Expandida descripción de estimated_time_seconds para tests dinámicos",
+      "Mejoradas validaciones y ejemplos"
+    ],
+    "compatibility": "Compatible con sistema dinámico v2.0 con interfaz limpia, anti-repetición y base de datos con 8 tablas",
+    "usage": "Este schema define bancos de preguntas que se cargan automáticamente en la base de datos para generar tests dinámicos con algoritmo anti-repetición"
   }
 }

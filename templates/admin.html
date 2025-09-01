@@ -198,6 +198,60 @@
             background: #e53e3e;
         }
 
+        .session-card {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .session-info h3 {
+            color: #2d3748;
+            margin-bottom: 0.25rem;
+            font-size: 1rem;
+        }
+
+        .session-info p {
+            color: #718096;
+            font-size: 0.9rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .session-stats {
+            display: flex;
+            gap: 1rem;
+            font-size: 0.8rem;
+            color: #a0aec0;
+            flex-wrap: wrap;
+        }
+
+        .session-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+
+        .session-actions button {
+            padding: 0.4rem 0.8rem;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .view-btn {
+            background: #667eea;
+            color: white;
+        }
+
+        .view-btn:hover {
+            background: #5a67d8;
+        }
+
         .message {
             padding: 1rem;
             border-radius: 8px;
@@ -280,6 +334,24 @@
             <p style="margin-top: 1rem; color: #718096; font-size: 0.9rem;">
                 ℹ️ El archivo debe ser un JSON válido con formato de banco de preguntas y el nombre debe comenzar con "bank_"
             </p>
+        </div>
+
+        <!-- Completed Tests Management -->
+        <div class="banks-section">
+            <h2>📋 Tests Completados</h2>
+            <div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                <button id="loadSessionsBtn" class="upload-btn" onclick="loadCompletedSessions()">
+                    📊 Cargar Tests Completados
+                </button>
+                <button id="deleteAllBtn" class="delete-btn" onclick="deleteAllSessions()" style="display: none;">
+                    🗑️ Eliminar Todos
+                </button>
+            </div>
+            <div id="sessionsContainer" style="display: none;">
+                <div id="sessionsList" class="banks-list">
+                    <!-- Sessions will be loaded here -->
+                </div>
+            </div>
         </div>
 
         <!-- Question Banks List -->
@@ -412,6 +484,148 @@
             const fileName = fileInput.files[0] ? fileInput.files[0].name : 'Seleccionar archivo JSON...';
             fileInput.style.color = fileInput.files[0] ? '#2d3748' : '#a0aec0';
         });
+
+        // Load completed sessions
+        async function loadCompletedSessions() {
+            const loadBtn = document.getElementById('loadSessionsBtn');
+            const container = document.getElementById('sessionsContainer');
+            const sessionsList = document.getElementById('sessionsList');
+            const deleteAllBtn = document.getElementById('deleteAllBtn');
+            
+            loadBtn.disabled = true;
+            loadBtn.textContent = '⏳ Cargando...';
+            
+            try {
+                const response = await fetch('/admin/sessions?limit=50');
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    if (result.sessions.length === 0) {
+                        sessionsList.innerHTML = '<p style="color: #718096; text-align: center; padding: 2rem;">No hay tests completados.</p>';
+                    } else {
+                        let sessionsHtml = '';
+                        result.sessions.forEach(session => {
+                            const date = new Date(session.completed_at).toLocaleString('es-ES');
+                            const duration = Math.round(session.duration_seconds / 60);
+                            const testType = session.is_dynamic_test ? session.test_type || 'Dinámico' : 'Estático';
+                            
+                            sessionsHtml += `
+                                <div class="session-card" data-session-id="${session.session_id}">
+                                    <div class="session-info">
+                                        <h3>${session.test_title}</h3>
+                                        <p>IP: ${session.user_ip || 'N/A'} • Tipo: ${testType}</p>
+                                        <div class="session-stats">
+                                            <span>Puntuación: ${session.score_percentage.toFixed(1)}%</span>
+                                            <span>•</span>
+                                            <span>${session.correct_answers}/${session.total_questions} correctas</span>
+                                            <span>•</span>
+                                            <span>Duración: ${duration} min</span>
+                                            <span>•</span>
+                                            <span>Completado: ${date}</span>
+                                        </div>
+                                    </div>
+                                    <div class="session-actions">
+                                        <button class="view-btn" onclick="window.open('/results/${session.session_id}', '_blank')">
+                                            👁️ Ver
+                                        </button>
+                                        <button class="delete-btn" onclick="deleteSession('${session.session_id}', '${session.test_title}')">
+                                            🗑️ Eliminar
+                                        </button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        sessionsList.innerHTML = sessionsHtml;
+                        deleteAllBtn.style.display = 'block';
+                    }
+                    
+                    container.style.display = 'block';
+                    loadBtn.textContent = '🔄 Recargar';
+                } else {
+                    showMessage(result.detail || 'Error al cargar sesiones', 'error');
+                }
+            } catch (error) {
+                showMessage('Error de conexión: ' + error.message, 'error');
+            } finally {
+                loadBtn.disabled = false;
+                if (loadBtn.textContent === '⏳ Cargando...') {
+                    loadBtn.textContent = '📊 Cargar Tests Completados';
+                }
+            }
+        }
+
+        // Delete individual session
+        async function deleteSession(sessionId, testTitle) {
+            if (!confirm(`¿Estás seguro de que quieres eliminar el test completado "${testTitle}"?\n\nEsto eliminará permanentemente todos los datos de esta sesión.`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/session/${sessionId}`, {
+                    method: 'DELETE'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    showMessage(result.message, 'success');
+                    // Remove session card from UI
+                    document.querySelector(`[data-session-id="${sessionId}"]`).remove();
+                    
+                    // Hide delete all button if no sessions left
+                    if (document.querySelectorAll('.session-card').length === 0) {
+                        document.getElementById('deleteAllBtn').style.display = 'none';
+                        document.getElementById('sessionsList').innerHTML = '<p style="color: #718096; text-align: center; padding: 2rem;">No hay tests completados.</p>';
+                    }
+                } else {
+                    showMessage(result.detail || 'Error al eliminar sesión', 'error');
+                }
+            } catch (error) {
+                showMessage('Error de conexión: ' + error.message, 'error');
+            }
+        }
+
+        // Delete all sessions
+        async function deleteAllSessions() {
+            const sessionCards = document.querySelectorAll('.session-card');
+            if (sessionCards.length === 0) {
+                showMessage('No hay sesiones para eliminar', 'error');
+                return;
+            }
+            
+            if (!confirm(`¿Estás seguro de que quieres eliminar TODAS las ${sessionCards.length} sesiones completadas?\n\nEsta acción no se puede deshacer.`)) {
+                return;
+            }
+            
+            let deletedCount = 0;
+            let errorCount = 0;
+            
+            for (const card of sessionCards) {
+                const sessionId = card.dataset.sessionId;
+                try {
+                    const response = await fetch(`/admin/session/${sessionId}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    if (response.ok) {
+                        deletedCount++;
+                        card.remove();
+                    } else {
+                        errorCount++;
+                    }
+                } catch (error) {
+                    errorCount++;
+                }
+            }
+            
+            if (errorCount === 0) {
+                showMessage(`${deletedCount} sesiones eliminadas correctamente`, 'success');
+                document.getElementById('deleteAllBtn').style.display = 'none';
+                document.getElementById('sessionsList').innerHTML = '<p style="color: #718096; text-align: center; padding: 2rem;">No hay tests completados.</p>';
+            } else {
+                showMessage(`${deletedCount} eliminadas, ${errorCount} errores`, 'error');
+            }
+        }
     </script>
 </body>
 </html>

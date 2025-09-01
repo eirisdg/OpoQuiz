@@ -9,8 +9,8 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      # Tests JSON - archivos generados manualmente por Claude Code
-      - ./tests:/app/tests:ro
+      # Tests JSON - archivos generados manualmente por Claude Code (rw para admin uploads)
+      - ./tests:/app/tests
       # Base de datos SQLite para estadísticas
       - ./data:/app/data
       # Templates de referencia

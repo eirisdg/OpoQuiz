@@ -389,6 +389,97 @@ async def delete_question_bank(
         raise HTTPException(status_code=500, detail=f"Error deleting bank: {str(e)}")
 
 
+@app.get("/admin/sessions")
+async def list_test_sessions(
+    db: DatabaseManager = Depends(get_db_manager),
+    limit: int = 50
+):
+    """List completed test sessions for admin management."""
+    try:
+        async with db.get_connection() as conn:
+            cursor = await conn.execute("""
+                SELECT 
+                    ts.session_id,
+                    ts.test_id,
+                    COALESCE(dt.test_title, ts.test_title, ts.test_id) as test_title,
+                    ts.user_ip,
+                    ts.started_at,
+                    ts.completed_at,
+                    ts.total_questions,
+                    ts.correct_answers,
+                    ts.score_percentage,
+                    ts.duration_seconds,
+                    ts.is_dynamic_test,
+                    ts.test_type
+                FROM test_sessions ts
+                LEFT JOIN dynamic_tests dt ON ts.test_id = dt.test_id
+                ORDER BY ts.completed_at DESC
+                LIMIT ?
+            """, (limit,))
+            sessions = await cursor.fetchall()
+        
+        session_list = []
+        for session in sessions:
+            session_list.append({
+                'session_id': session[0],
+                'test_id': session[1],
+                'test_title': session[2] or f"Test {session[1]}",
+                'user_ip': session[3],
+                'started_at': session[4],
+                'completed_at': session[5],
+                'total_questions': session[6],
+                'correct_answers': session[7],
+                'score_percentage': session[8],
+                'duration_seconds': session[9],
+                'is_dynamic_test': bool(session[10]),
+                'test_type': session[11]
+            })
+        
+        return JSONResponse({
+            "success": True,
+            "sessions": session_list,
+            "total": len(session_list)
+        })
+        
+    except Exception as e:
+        print(f"Error in list_test_sessions: {e}")
+        raise HTTPException(status_code=500, detail=f"Error listing sessions: {str(e)}")
+
+
+@app.delete("/admin/session/{session_id}")
+async def delete_test_session(
+    session_id: str,
+    db: DatabaseManager = Depends(get_db_manager)
+):
+    """Delete a test session and its related data."""
+    try:
+        async with db.get_connection() as conn:
+            # Check if session exists
+            cursor = await conn.execute("SELECT session_id FROM test_sessions WHERE session_id = ?", (session_id,))
+            session = await cursor.fetchone()
+            
+            if not session:
+                raise HTTPException(status_code=404, detail="Test session not found")
+            
+            # Delete related data in order (foreign key constraints)
+            await conn.execute("DELETE FROM user_answers WHERE session_id = ?", (session_id,))
+            await conn.execute("DELETE FROM session_progress WHERE session_id = ?", (session_id,))
+            await conn.execute("DELETE FROM test_sessions WHERE session_id = ?", (session_id,))
+            
+            await conn.commit()
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Successfully deleted session {session_id}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in delete_test_session: {e}")
+        raise HTTPException(status_code=500, detail=f"Error deleting session: {str(e)}")
+
+
 @app.get("/test/{session_id}", response_class=HTMLResponse)
 async def test_page(
     session_id: str,
@@ -441,24 +532,43 @@ async def test_question_page(
                 "redirect_url": f"/results/{session_id}"
             })
         
-        # Get test data
-        test_schema = app.state.tests_cache.get(session_data['test_id'])
-        if not test_schema:
-            raise HTTPException(status_code=404, detail="Test not found")
+        # Get test data (dynamic or static)
+        test_data = await db.get_dynamic_test(session_data['test_id'])
+        print(f"DEBUG: test_data from get_dynamic_test: {test_data is not None}")
+        if test_data:
+            print(f"DEBUG: test_data type: {type(test_data)}")
+            print(f"DEBUG: test_data keys: {list(test_data.keys()) if isinstance(test_data, dict) else 'not dict'}")
+        
+        if not test_data:
+            # Fallback to static tests cache if dynamic test not found
+            test_schema = app.state.tests_cache.get(session_data['test_id'])
+            print(f"DEBUG: fallback test_schema: {test_schema is not None}")
+            if not test_schema:
+                raise HTTPException(status_code=404, detail="Test not found")
+            test_data = test_schema
+        
+        # Get questions list (handle both dict and object formats)
+        questions = test_data['questions'] if isinstance(test_data, dict) else test_data.questions
+        print(f"DEBUG: questions length: {len(questions)}")
+        print(f"DEBUG: question_index: {question_index}")
         
         # Validate question index
-        if question_index < 0 or question_index >= len(test_schema.questions):
+        if question_index < 0 or question_index >= len(questions):
+            print(f"DEBUG: Question index validation failed. Index: {question_index}, Length: {len(questions)}")
             raise HTTPException(status_code=404, detail="Question not found")
         
         # Get current question
-        question = test_schema.questions[question_index]
+        question = questions[question_index]
+        print(f"DEBUG: question type: {type(question)}")
+        print(f"DEBUG: question keys: {list(question.keys()) if isinstance(question, dict) else 'not dict'}")
         
         # Get any existing answer for this question
         answers_data = session_data.get('answers_data', {})
-        selected_answer = answers_data.get(str(question.id))
+        question_id = question.get('id') if isinstance(question, dict) else question.id
+        selected_answer = answers_data.get(str(question_id))
         
         # Get answered questions for navigation
-        answered_questions = [int(k) for k in answers_data.keys() if answers_data[k] is not None]
+        answered_questions = [k for k in answers_data.keys() if answers_data[k] is not None]
         
         # Update current question index
         await db.update_session_progress(session_id, question_index, answers_data)
@@ -467,12 +577,12 @@ async def test_question_page(
             "request": request,
             "session_id": session_id,
             "test_data": {
-                "title": test_schema.title,
-                "test_id": test_schema.test_id
+                "title": test_data.get('title') if isinstance(test_data, dict) else test_data.title,
+                "test_id": test_data.get('test_id') if isinstance(test_data, dict) else test_data.test_id
             },
             "question": question,
             "current_question": question_index,
-            "total_questions": len(test_schema.questions),
+            "total_questions": len(questions),
             "selected_answer": selected_answer,
             "answered_questions": answered_questions,
             "session_start_time": session_data.get('started_at')
@@ -505,49 +615,82 @@ async def results_page(
         
         # Build results structure for template
         detailed_answers = []
-        test_schema = app.state.tests_cache.get(session_data['test_id'])
+        
+        # Get test data (dynamic or static)
+        test_data = await db.get_dynamic_test(session_data['test_id'])
+        
+        if not test_data:
+            # Fallback to static tests cache if dynamic test not found
+            test_schema = app.state.tests_cache.get(session_data['test_id'])
+            if test_schema:
+                test_data = test_schema
         
         for answer in answers:
-            if test_schema:
-                question = next((q for q in test_schema.questions if q.id == answer['question_id']), None)
-                if question:
-                    detailed_answers.append({
-                        'question_id': answer['question_id'],
-                        'question_text': answer['question_text'],
-                        'selected_answer': answer['selected_answer'],
-                        'correct_answer': answer['correct_answer'],
-                        'is_correct': answer['is_correct'],
-                        'selected_option': question.options[answer['selected_answer']] if answer['selected_answer'] is not None else "Sin responder",
-                        'correct_option': question.options[answer['correct_answer']],
-                        'explanation': getattr(question, 'explanation', None),
-                        'source_info': getattr(question, 'source_info', None),
-                        'points_earned': answer['points_earned'],
-                        'time_spent_seconds': answer['time_spent_seconds']
-                    })
+            question = None
+            if test_data:
+                if isinstance(test_data, dict):
+                    # Dynamic test - search in questions list by string ID
+                    answer_id = str(answer['question_id'])
+                    # Try to find by question_id first, then by id
+                    question = next((q for q in test_data['questions'] if str(q.get('question_id', '')) == answer_id), None)
+                    if not question:
+                        question = next((q for q in test_data['questions'] if str(q.get('id', '')) == answer_id), None)
+                else:
+                    # Static test - search in questions list
+                    question = next((q for q in test_data.questions if q.id == answer['question_id']), None)
+                
+            if question:
+                # Handle both dict and object formats
+                options = question.get('options') if isinstance(question, dict) else question.options
+                explanation = question.get('explanation', '') if isinstance(question, dict) else getattr(question, 'explanation', '')
+                source_info = question.get('source_info', {}) if isinstance(question, dict) else getattr(question, 'source_info', {})
+                
+                detailed_answers.append({
+                    'question_id': answer['question_id'],
+                    'question_text': answer['question_text'],
+                    'selected_answer': answer['selected_answer'],
+                    'correct_answer': answer['correct_answer'],
+                    'is_correct': answer['is_correct'],
+                    'selected_option': options[answer['selected_answer']] if answer['selected_answer'] is not None and answer['selected_answer'] < len(options) else "Sin responder",
+                    'correct_option': options[answer['correct_answer']] if answer['correct_answer'] < len(options) else "N/A",
+                    'explanation': explanation,
+                    'source_info': source_info,
+                    'points_earned': answer['points_earned'],
+                    'time_spent_seconds': answer['time_spent_seconds']
+                })
+        
+        print(f"DEBUG RESULTS: Built {len(detailed_answers)} detailed answers")
         
         # Calculate category and difficulty performance
         category_performance = {}
         difficulty_performance = {}
         
         for answer in answers:
-            if test_schema:
-                question = next((q for q in test_schema.questions if q.id == answer['question_id']), None)
-                if question:
-                    # Category performance
-                    cat = question.category.value if hasattr(question.category, 'value') else str(question.category)
-                    if cat not in category_performance:
-                        category_performance[cat] = {'correct': 0, 'total': 0, 'percentage': 0}
-                    category_performance[cat]['total'] += 1
-                    if answer['is_correct']:
-                        category_performance[cat]['correct'] += 1
+            question = None
+            if test_data:
+                if isinstance(test_data, dict):
+                    # Dynamic test - search in questions list
+                    question = next((q for q in test_data['questions'] if q['id'] == answer['question_id']), None)
+                else:
+                    # Static test - search in questions list
+                    question = next((q for q in test_data.questions if q.id == answer['question_id']), None)
                     
-                    # Difficulty performance
-                    diff = question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty)
-                    if diff not in difficulty_performance:
-                        difficulty_performance[diff] = {'correct': 0, 'total': 0, 'percentage': 0}
-                    difficulty_performance[diff]['total'] += 1
-                    if answer['is_correct']:
-                        difficulty_performance[diff]['correct'] += 1
+            if question:
+                # Handle both dict and object formats for category
+                cat = question.get('category') if isinstance(question, dict) else (question.category.value if hasattr(question.category, 'value') else str(question.category))
+                if cat not in category_performance:
+                    category_performance[cat] = {'correct': 0, 'total': 0, 'percentage': 0}
+                category_performance[cat]['total'] += 1
+                if answer['is_correct']:
+                    category_performance[cat]['correct'] += 1
+                
+                # Handle both dict and object formats for difficulty
+                diff = question.get('difficulty') if isinstance(question, dict) else (question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty))
+                if diff not in difficulty_performance:
+                    difficulty_performance[diff] = {'correct': 0, 'total': 0, 'percentage': 0}
+                difficulty_performance[diff]['total'] += 1
+                if answer['is_correct']:
+                    difficulty_performance[diff]['correct'] += 1
         
         # Calculate percentages
         for perf in category_performance.values():
@@ -620,14 +763,24 @@ async def start_session(
     db: DatabaseManager = Depends(get_db_manager)
 ):
     """Start a new test session."""
+    print(f"[DEBUG] Starting session with request_data: {request_data}")
     test_id = request_data.test_id
+    print(f"[DEBUG] test_id: {test_id}, is_random_test: {request_data.is_random_test}")
     
     # Handle random test generation
     if test_id == 'random' or test_id == 'failed_questions' or request_data.is_random_test:
-        test_schema = await generate_random_test(request_data.random_config or {})
-        test_id = test_schema.test_id
-        # Store in cache temporarily
-        app.state.tests_cache[test_id] = test_schema
+        try:
+            print(f"[DEBUG] About to call generate_random_test with config: {request_data.random_config}")
+            test_schema = await generate_dynamic_random_test(request_data.random_config or {})
+            print(f"[DEBUG] Successfully generated test_schema: {test_schema.test_id}")
+            test_id = test_schema.test_id
+            # Store in cache temporarily
+            app.state.tests_cache[test_id] = test_schema
+        except Exception as e:
+            print(f"[ERROR] Error in generate_random_test: {e}")
+            import traceback
+            print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+            raise
     elif test_id not in app.state.tests_cache:
         raise HTTPException(status_code=404, detail="Test not found")
     else:
@@ -683,8 +836,8 @@ async def get_question(
         question_id=question.id,
         question=question.question,
         options=question.options,
-        category=question.category.value,
-        difficulty=question.difficulty.value,
+        category=question.category.value if hasattr(question.category, 'value') else str(question.category),
+        difficulty=question.difficulty.value if hasattr(question.difficulty, 'value') else str(question.difficulty),
         current_position=question_index + 1,
         total_questions=len(test_schema.questions),
         can_go_previous=question_index > 0,
@@ -716,6 +869,14 @@ async def submit_answer(
         answers
     )
     
+    # Save basic answer immediately to ensure no data loss
+    await db.save_user_answer_basic(
+        session_id,
+        str(answer_data.question_id),
+        answer_data.selected_answer,
+        answer_data.time_spent_seconds
+    )
+    
     return {"status": "answer_saved", "question_id": answer_data.question_id}
 
 
@@ -730,9 +891,14 @@ async def complete_test(
     if not session_data:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    test_schema = app.state.tests_cache.get(session_data['test_id'])
-    if not test_schema:
-        raise HTTPException(status_code=404, detail="Test not found")
+    # Get test data (dynamic or static)
+    test_data = await db.get_dynamic_test(session_data['test_id'])
+    if not test_data:
+        # Fallback to static tests cache if dynamic test not found
+        test_schema = app.state.tests_cache.get(session_data['test_id'])
+        if not test_schema:
+            raise HTTPException(status_code=404, detail="Test not found")
+        test_data = test_schema
     
     # Calculate results
     answers_data = session_data.get('answers_data', {})
@@ -743,22 +909,26 @@ async def complete_test(
     category_stats = {}
     difficulty_stats = {}
     
-    for question in test_schema.questions:
-        q_id = str(question.id)
+    questions = test_data['questions'] if isinstance(test_data, dict) else test_data.questions
+    for question in questions:
+        # Handle both dict and object formats
+        # Use question_id for dynamic tests, fallback to id for static tests
+        q_id = str(question.get('question_id') if isinstance(question, dict) and question.get('question_id') else (question.get('id') if isinstance(question, dict) else question.id))
         user_answer_data = answers_data.get(q_id, {})
         selected_answer = user_answer_data.get('selected_answer')
         
-        is_correct = selected_answer == question.correct_answer
-        question_points = question.points if is_correct else 0
+        correct_answer = question.get('correct_answer') if isinstance(question, dict) else question.correct_answer
+        is_correct = selected_answer == correct_answer
+        question_points = question.get('points', 1) if isinstance(question, dict) else getattr(question, 'points', 1)
         
         if is_correct:
             correct_count += 1
-            points_earned += question.points
+            points_earned += question_points
         
-        total_points += question.points
+        total_points += question_points
         
         # Category stats
-        cat = question.category.value
+        cat = question.get('category') if isinstance(question, dict) else (question.category.value if hasattr(question.category, 'value') else question.category)
         if cat not in category_stats:
             category_stats[cat] = {'correct': 0, 'total': 0}
         category_stats[cat]['total'] += 1
@@ -766,7 +936,7 @@ async def complete_test(
             category_stats[cat]['correct'] += 1
         
         # Difficulty stats  
-        diff = question.difficulty.value
+        diff = question.get('difficulty') if isinstance(question, dict) else (question.difficulty.value if hasattr(question.difficulty, 'value') else question.difficulty)
         if diff not in difficulty_stats:
             difficulty_stats[diff] = {'correct': 0, 'total': 0}
         difficulty_stats[diff]['total'] += 1
@@ -774,35 +944,46 @@ async def complete_test(
             difficulty_stats[diff]['correct'] += 1
         
         # Save answer to database
+        question_text = question.get('question') if isinstance(question, dict) else question.question
+        options = question.get('options') if isinstance(question, dict) else question.options
+        explanation = question.get('explanation', '') if isinstance(question, dict) else getattr(question, 'explanation', '')
+        source_info_raw = question.get('source_info', {}) if isinstance(question, dict) else getattr(question, 'source_info', {})
+        
+        # Convert source_info to proper format or None for Pydantic validation
+        source_info = None
+        if source_info_raw and isinstance(source_info_raw, dict) and source_info_raw.get('document'):
+            source_info = source_info_raw
+        
         await db.save_answer(session_id, {
-            'question_id': question.id,
-            'question_text': question.question,
+            'question_id': str(q_id),
+            'question_text': question_text,
             'selected_answer': selected_answer,
-            'correct_answer': question.correct_answer,
+            'correct_answer': correct_answer,
             'is_correct': is_correct,
-            'points_available': question.points,
-            'points_earned': question_points,
+            'points_available': question_points,
+            'points_earned': question_points if is_correct else 0,
             'time_spent_seconds': user_answer_data.get('time_spent_seconds', 0)
         })
         
         detailed_answers.append(AnswerDetail(
-            question_id=question.id,
-            question_text=question.question,
+            question_id=str(q_id),
+            question_text=question_text,
             selected_answer=selected_answer if selected_answer is not None else -1,
-            correct_answer=question.correct_answer,
+            correct_answer=correct_answer,
             is_correct=is_correct,
-            selected_option=question.options[selected_answer] if selected_answer is not None else "No respondida",
-            correct_option=question.options[question.correct_answer],
-            explanation=question.explanation,
-            source_info=question.source_info,
-            points_earned=question_points,
+            selected_option=options[selected_answer] if selected_answer is not None and selected_answer < len(options) else "No respondida",
+            correct_option=options[correct_answer] if correct_answer < len(options) else "N/A",
+            explanation=explanation,
+            source_info=source_info,
+            points_earned=question_points if is_correct else 0,
             time_spent_seconds=user_answer_data.get('time_spent_seconds', 0)
         ))
     
     # Calculate final metrics
     percentage = (points_earned / total_points * 100) if total_points > 0 else 0
     duration = int((datetime.now() - datetime.fromisoformat(session_data['started_at'].replace('Z', '+00:00'))).total_seconds())
-    passed = percentage >= test_schema.passing_grade
+    passing_grade = test_data.get('passing_grade', 70) if isinstance(test_data, dict) else getattr(test_data, 'passing_grade', 70)
+    passed = percentage >= passing_grade
     
     # Complete session
     await db.complete_session(session_id, {
@@ -815,7 +996,10 @@ async def complete_test(
     })
     
     # Update test statistics
-    await db.update_test_stats(test_schema.test_id, test_schema.title, percentage, len(test_schema.questions))
+    test_id = test_data.get('test_id') if isinstance(test_data, dict) else test_data.test_id
+    test_title = test_data.get('title') if isinstance(test_data, dict) else test_data.title
+    question_count = len(questions)
+    await db.update_test_stats(test_id, test_title, percentage, question_count)
     
     # Build category performance
     category_performance = {}
@@ -836,9 +1020,9 @@ async def complete_test(
     
     return TestResultsResponse(
         session_id=session_id,
-        test_id=test_schema.test_id,
+        test_id=test_id,
         score=correct_count,
-        total_questions=len(test_schema.questions),
+        total_questions=question_count,
         total_points=total_points,
         points_earned=points_earned,
         percentage=round(percentage, 2),
@@ -990,7 +1174,13 @@ async def generate_dynamic_test(
                 criteria = {"question_ids": question_ids}
                 test_title = f"Repaso de Errores - {len(question_ids)} preguntas"
             else:
-                raise HTTPException(status_code=400, detail="Session-specific failed questions not yet implemented")
+                # Get failed questions from specific session
+                failed_questions = await db.get_failed_questions_from_session(source_session_id, num_questions)
+                if not failed_questions:
+                    raise HTTPException(status_code=400, detail="No failed questions found in the specified session")
+                question_ids = [q['question_id'] for q in failed_questions]
+                criteria = {"question_ids": question_ids}
+                test_title = f"Repaso de Errores - {len(question_ids)} preguntas de sesión {source_session_id}"
         
         else:
             raise HTTPException(status_code=400, detail="Invalid test type")
@@ -1072,6 +1262,129 @@ async def health_check(db: DatabaseManager = Depends(get_db_manager)):
         database_connected=db_healthy,
         tests_available=len(app.state.tests_cache)
     )
+
+
+async def generate_dynamic_random_test(config: Dict[str, Any]) -> TestSchema:
+    """Generate a random test from question bank."""
+    from app.database import DatabaseManager
+    db = DatabaseManager()
+    
+    # Default configuration
+    num_questions = config.get('num_questions', 10)
+    difficulty = config.get('difficulty', 'mixed')
+    categories = config.get('categories', [])
+    failed_questions_only = config.get('failed_questions_only', False)
+    source_session_id = config.get('source_session_id')
+    user_ip = config.get('user_ip', 'anonymous')
+    
+    # Build criteria for question selection
+    criteria = {
+        'difficulty': difficulty,
+        'categories': categories if categories else None
+    }
+    
+    # Get questions based on criteria
+    print(f"[DEBUG] Generating random test with config: {config}")
+    print(f"[DEBUG] Criteria: {criteria}, user_ip: {user_ip}, num_questions: {num_questions}")
+    
+    try:
+        if failed_questions_only and source_session_id:
+            questions_data = await db.get_failed_questions_from_session(source_session_id, num_questions)
+        elif failed_questions_only:
+            questions_data = await db.get_failed_questions(user_ip, num_questions)
+        else:
+            questions_data = await db.get_questions_by_criteria(criteria, user_ip, num_questions)
+        
+        print(f"[DEBUG] Retrieved {len(questions_data) if questions_data else 0} questions")
+        
+    except Exception as e:
+        print(f"[ERROR] Error getting questions: {e}")
+        import traceback
+        print(f"[ERROR] Full traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+    
+    if not questions_data:
+        print("[DEBUG] No questions found, checking database...")
+        # Debug: check if questions exist at all
+        try:
+            async with db.get_connection() as conn:
+                cursor = await conn.execute("SELECT COUNT(*) FROM questions")
+                total_questions = await cursor.fetchone()
+                print(f"[DEBUG] Total questions in DB: {total_questions[0] if total_questions else 0}")
+        except Exception as debug_e:
+            print(f"[DEBUG] Error checking total questions: {debug_e}")
+        
+        raise HTTPException(status_code=404, detail="No questions available for random test generation")
+    
+    # Convert to QuestionData objects
+    questions = []
+    for i, q_data in enumerate(questions_data):
+        question = QuestionData(
+            id=str(q_data['question_id']),
+            question=q_data['question_text'],
+            options=q_data['options'],
+            correct_answer=q_data['correct_answer'],
+            explanation=q_data.get('explanation', ''),
+            difficulty=DifficultyLevel(q_data.get('difficulty', 'medium')),
+            category=CategoryType(q_data.get('category', 'general')),
+            keywords=q_data.get('keywords', []),
+            estimated_time_seconds=q_data.get('estimated_time_seconds', 90),
+            source_info=q_data.get('source_info', {})
+        )
+        questions.append(question)
+    
+    # Generate test ID
+    if failed_questions_only:
+        test_type = "failed"
+    elif categories:
+        test_type = "category"
+    elif difficulty != 'mixed':
+        test_type = "difficulty"
+    else:
+        test_type = "random"
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    test_id = f"dyn_{test_type}_{timestamp}_{str(uuid.uuid4())[:8]}"
+    
+    # Create test title
+    if failed_questions_only:
+        title = f"Repasar Errores - {len(questions)} preguntas"
+    elif categories:
+        cats_str = ", ".join(categories[:2]) + ("..." if len(categories) > 2 else "")
+        title = f"Test por Categorías ({cats_str}) - {len(questions)} preguntas"
+    elif difficulty != 'mixed':
+        title = f"Test {difficulty.title()} - {len(questions)} preguntas"
+    else:
+        title = f"Test Aleatorio - {len(questions)} preguntas"
+    
+    # Calculate estimated duration
+    total_time = sum(q.estimated_time_seconds for q in questions)
+    estimated_duration = max(5, round(total_time / 60))  # minutes, minimum 5
+    
+    # Create TestSchema
+    test_schema = TestSchema(
+        test_id=test_id,
+        title=title,
+        description=f"Test generado dinámicamente con {len(questions)} preguntas.",
+        created_at=datetime.now(),
+        category=CategoryType("general"),
+        difficulty=DifficultyLevel(difficulty) if difficulty != 'mixed' else DifficultyLevel("mixed"),
+        estimated_duration=estimated_duration,
+        passing_grade=70,
+        questions=questions
+    )
+    
+    # Save dynamic test to database
+    await db.save_dynamic_test({
+        'test_id': test_id,
+        'test_type': test_type,
+        'test_title': title,
+        'criteria': criteria,
+        'question_ids': [q.id for q in questions],
+        'user_ip': user_ip
+    })
+    
+    return test_schema
 
 
 # Utility Functions

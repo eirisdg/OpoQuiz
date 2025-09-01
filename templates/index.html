@@ -69,13 +69,6 @@
                     <p>Test con preguntas previamente falladas</p>
                 </div>
             </div>
-            
-            <!-- Admin Panel Button -->
-            <div style="text-align: center; margin-top: 1.5rem;">
-                <a href="/admin" class="btn" style="background: #6c757d; color: white; font-size: 0.9rem;">
-                    🔧 Panel Admin
-                </a>
-            </div>
         </div>
     </div>
     
@@ -788,27 +781,32 @@
         try {
             showLoading('Generando test de repaso...');
             
-            const response = await fetch('/api/sessions', {
+            // Generate dynamic test with failed questions (this already creates the session)
+            const generateResponse = await fetch('/api/generate-test', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
-                    test_id: 'failed_questions',
-                    is_random_test: true,
-                    random_config: {
-                        source_session_id: sessionId,
-                        failed_questions_only: true
+                    test_type: 'failed_questions',
+                    num_questions: 10,
+                    config: {
+                        source_session_id: sessionId
                     }
                 })
             });
             
-            if (response.ok) {
-                const session = await response.json();
-                window.location.href = '/test/' + session.session_id;
-            } else {
-                alert('Error al generar el test de repaso. Inténtalo de nuevo.');
+            if (!generateResponse.ok) {
+                const errorData = await generateResponse.json();
+                alert(errorData.detail || 'Error al generar el test de repaso.');
+                return;
             }
+            
+            const testData = await generateResponse.json();
+            
+            // Redirect directly to the test (session already created by /api/generate-test)
+            window.location.href = '/test/' + testData.session_id;
+            
         } catch (error) {
             alert('Error al generar el test de repaso.');
             console.error(error);

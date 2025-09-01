@@ -437,6 +437,31 @@ class DatabaseManager:
             
             return questions
     
+    async def get_failed_questions_from_session(self, session_id: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Get questions that the user answered incorrectly in a specific session."""
+        async with self.get_connection() as db:
+            cursor = await db.execute("""
+                SELECT DISTINCT q.*
+                FROM questions q
+                JOIN user_answers ua ON q.question_id = ua.question_id
+                WHERE ua.session_id = ? AND ua.is_correct = 0
+                ORDER BY RANDOM()
+                LIMIT ?
+            """, (session_id, limit))
+            
+            rows = await cursor.fetchall()
+            columns = [description[0] for description in cursor.description]
+            
+            questions = []
+            for row in rows:
+                question_data = dict(zip(columns, row))
+                question_data['options'] = json.loads(question_data['options_json'])
+                question_data['keywords'] = json.loads(question_data.get('keywords_json', '[]'))
+                question_data['source_info'] = json.loads(question_data.get('source_info_json', '{}'))
+                questions.append(question_data)
+            
+            return questions
+    
     async def update_question_usage(self, question_id: str, user_ip: str, is_correct: bool):
         """Update question usage statistics."""
         async with self.get_connection() as db:
@@ -478,6 +503,75 @@ class DatabaseManager:
             ))
             await db.commit()
             return test_data['test_id']
+    
+    async def get_dynamic_test(self, test_id: str) -> Optional[Dict[str, Any]]:
+        """Get dynamic test data with questions."""
+        async with self.get_connection() as db:
+            # Get test metadata
+            cursor = await db.execute("""
+                SELECT test_id, test_type, test_title, generation_criteria_json, question_ids_json, created_at
+                FROM dynamic_tests 
+                WHERE test_id = ?
+            """, (test_id,))
+            test_row = await cursor.fetchone()
+            
+            if not test_row:
+                return None
+            
+            # Parse JSON fields
+            question_ids = json.loads(test_row[4])
+            criteria = json.loads(test_row[3]) if test_row[3] else {}
+            
+            print(f"DEBUG DB: question_ids from dynamic_tests: {question_ids}")
+            print(f"DEBUG DB: question_ids length: {len(question_ids) if question_ids else 0}")
+            
+            # Get questions in order
+            if not question_ids:
+                print("DEBUG DB: No question_ids found, returning None")
+                return None
+            
+            placeholders = ','.join(['?' for _ in question_ids])
+            cursor = await db.execute(f"""
+                SELECT id, question_id, question_text, options_json, correct_answer, explanation, 
+                       difficulty, category, keywords_json, estimated_time_seconds
+                FROM questions 
+                WHERE question_id IN ({placeholders})
+            """, question_ids)
+            
+            question_rows = await cursor.fetchall()
+            print(f"DEBUG DB: Found {len(question_rows)} question rows from database")
+            
+            # Create question objects in correct order
+            questions_dict = {}
+            for row in question_rows:
+                questions_dict[row[1]] = {  # Use row[1] which is question_id as key
+                    'id': row[0],  # id (numeric)
+                    'question_id': row[1],  # question_id (text)
+                    'question': row[2],  # question_text from DB
+                    'options': json.loads(row[3]) if row[3] else [],
+                    'correct_answer': row[4],
+                    'explanation': row[5],
+                    'difficulty': row[6],
+                    'category': row[7],
+                    'keywords': json.loads(row[8]) if row[8] else [],
+                    'estimated_time_seconds': row[9] or 90,
+                    'points': 1  # Default points for dynamic questions
+                }
+            
+            # Preserve order from question_ids
+            ordered_questions = []
+            for q_id in question_ids:
+                if q_id in questions_dict:
+                    ordered_questions.append(questions_dict[q_id])
+            
+            return {
+                'test_id': test_row[0],
+                'test_type': test_row[1],
+                'title': test_row[2],
+                'criteria': criteria,
+                'questions': ordered_questions,
+                'created_at': test_row[5]
+            }
     
     async def get_available_categories(self) -> List[str]:
         """Get all available question categories."""
@@ -543,6 +637,24 @@ class DatabaseManager:
                 answer_data.get('points_earned', 0),
                 answer_data.get('time_spent_seconds', 0)
             ))
+            await db.commit()
+    
+    async def save_user_answer_basic(self, session_id: str, question_id: str, selected_answer: int, time_spent_seconds: int):
+        """Save basic user answer without validation (for live answer saving)."""
+        async with self.get_connection() as db:
+            # First delete any existing answer for this session/question
+            await db.execute("""
+                DELETE FROM user_answers 
+                WHERE session_id = ? AND question_id = ?
+            """, (session_id, question_id))
+            
+            # Then insert the new answer
+            await db.execute("""
+                INSERT INTO user_answers 
+                (session_id, question_id, selected_answer, time_spent_seconds, 
+                 correct_answer, is_correct, points_available, points_earned, answered_at)
+                VALUES (?, ?, ?, ?, 0, 0, 1, 0, CURRENT_TIMESTAMP)
+            """, (session_id, question_id, selected_answer, time_spent_seconds))
             await db.commit()
     
     async def get_session_answers(self, session_id: str) -> List[Dict[str, Any]]:
@@ -631,6 +743,68 @@ class DatabaseManager:
         except Exception as e:
             print(f"Database health check failed: {e}")
             return False
+    
+    async def get_failed_questions(self, user_ip: str, limit: int = 20) -> List[Dict]:
+        """Get failed questions for a user across all sessions."""
+        try:
+            async with self.get_connection() as db:
+                query = """
+                    SELECT DISTINCT ua.question_id, ua.question_text,
+                           ts.user_ip, COUNT(*) as times_failed
+                    FROM user_answers ua
+                    JOIN test_sessions ts ON ua.session_id = ts.session_id 
+                    WHERE ts.user_ip = ? AND ua.is_correct = 0
+                    GROUP BY ua.question_id, ua.question_text
+                    ORDER BY times_failed DESC, ua.question_id
+                    LIMIT ?
+                """
+                
+                cursor = await db.execute(query, (user_ip, limit))
+                rows = await cursor.fetchall()
+                
+                failed_questions = []
+                for row in rows:
+                    failed_questions.append({
+                        'question_id': row[0],
+                        'question_text': row[1],
+                        'times_failed': row[3]
+                    })
+                
+                print(f"Found {len(failed_questions)} failed questions for user {user_ip}")
+                return failed_questions
+                
+        except Exception as e:
+            print(f"Error getting failed questions: {e}")
+            return []
+    
+    async def get_failed_questions_from_session(self, session_id: str, limit: int = 20) -> List[Dict]:
+        """Get failed questions from a specific session."""
+        try:
+            async with self.get_connection() as db:
+                query = """
+                    SELECT question_id, question_text
+                    FROM user_answers 
+                    WHERE session_id = ? AND is_correct = 0
+                    ORDER BY question_id
+                    LIMIT ?
+                """
+                
+                cursor = await db.execute(query, (session_id, limit))
+                rows = await cursor.fetchall()
+                
+                failed_questions = []
+                for row in rows:
+                    failed_questions.append({
+                        'question_id': row[0],
+                        'question_text': row[1]
+                    })
+                
+                print(f"Found {len(failed_questions)} failed questions for session {session_id}")
+                return failed_questions
+                
+        except Exception as e:
+            print(f"Error getting failed questions from session: {e}")
+            return []
 
 
 # Global database instance

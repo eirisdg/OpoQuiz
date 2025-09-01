@@ -59,7 +59,7 @@ class QuestionBankSchema(BaseModel):
 # Legacy Question Data (for backward compatibility)
 class QuestionData(BaseModel):
     """Individual question data (legacy format)."""
-    id: int
+    id: str
     question: str
     options: List[str] = Field(..., min_items=4, max_items=4)
     correct_answer: int = Field(..., ge=0, le=3)
@@ -154,7 +154,7 @@ class SessionResponse(BaseModel):
 class QuestionResponse(BaseModel):
     """Response for getting a question."""
     session_id: str
-    question_id: int
+    question_id: str
     question: str
     options: List[str]
     category: str
@@ -167,19 +167,19 @@ class QuestionResponse(BaseModel):
 
 class SubmitAnswerRequest(BaseModel):
     """Request to submit an answer."""
-    question_id: int
+    question_id: str
     selected_answer: int
     time_spent_seconds: Optional[int] = None
 
 
 class CompleteTestRequest(BaseModel):
     """Request to complete a test."""
-    final_answers: Optional[Dict[int, int]] = None
+    final_answers: Optional[Dict[str, int]] = None
 
 
 class AnswerDetail(BaseModel):
     """Detailed answer information."""
-    question_id: int
+    question_id: str
     question_text: str
     selected_answer: int
     correct_answer: int

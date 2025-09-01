@@ -184,6 +184,8 @@ The project includes two essential reference files for working with tests:
 - Progressive question navigation without validation
 - Optimized for slow mobile connections
 - Swipe-friendly interface design
+- Clean question display without metadata clutter
+- Focus on question content and answer options
 
 ## Development Workflow
 
@@ -196,12 +198,21 @@ Los cambios en código **NO** se reflejan automáticamente. Docker debe ser rein
 
 ### Recent Enhancements (2025-08)
 
-#### Interface Optimization (28/08/2025)
+#### Critical Bug Fixes (31/08/2025) - LATEST
+- ✅ **Detailed Results Fix**: Fixed critical issue where detailed answers weren't displayed in results page
+- ✅ **Field Mismatch Resolution**: Resolved `question_id` vs `id` field inconsistency in dynamic tests (main.py:635-637)
+- ✅ **Dual Search Implementation**: Added fallback search logic (question_id first, then id) for question matching
+- ✅ **Complete Verification**: All functionality verified working 100% with Playwright testing
+- ✅ **Code Cleanup**: Removed temporary debug logs after successful fixes
+
+#### Interface Optimization (29/08/2025)
 - ✅ **Simplified Navigation**: Removed top navigation bar, added header Inicio button
 - ✅ **Redesigned Test Selection**: 3 main buttons (New Test, Random Test, Review Failures)
 - ✅ **JSON-based Tests**: Direct loading from tests/*.json files 
 - ✅ **Improved Random Tests**: Better question distribution, avoid excessive repetition
 - ✅ **Clean Database**: Reset sessions, updated schema
+- ✅ **Clean Question Interface**: Removed category/difficulty labels from question display for cleaner UI
+- ✅ **Dynamic System Completion**: Full end-to-end dynamic test system with detailed results
 
 #### Previous Features
 - ✅ **Detailed Results**: Complete information about incorrect answers with explanations and sources

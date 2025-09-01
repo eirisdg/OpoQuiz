@@ -382,7 +382,11 @@
                 <h1>{% block header_title %}Test Generator{% endblock %}</h1>
                 <div class="subtitle">{% block header_subtitle %}Sistema interactivo de tests{% endblock %}</div>
             </div>
-            {% if request.url.path != '/' %}
+            {% if request.url.path == '/' %}
+            <a href="/admin" class="header-btn">
+                🔧 Admin
+            </a>
+            {% else %}
             <a href="/" class="header-btn">
                 🏠 Inicio
             </a>

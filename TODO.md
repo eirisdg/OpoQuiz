@@ -1,16 +1,25 @@
 # TODO - Aplicación de Tests de Seguridad Social
 
-## Estado Actual: ✅ **MVP COMPLETADO + INTERFAZ OPTIMIZADA**
-Sistema completamente funcional con API REST, interfaz móvil-first simplificada, tests aleatorios mejorados, **navegación optimizada** y **selección de tests rediseñada**.
+## Estado Actual: ✅ **SISTEMA DINÁMICO 100% FUNCIONAL**
+Sistema completamente funcional con API REST, interfaz móvil-first simplificada, tests aleatorios mejorados, **navegación optimizada**, **selección de tests rediseñada**, **sistema dinámico end-to-end operativo** y **respuestas detalladas completamente funcionales**.
 
 ## 🚀 Últimas Funcionalidades Implementadas (Agosto 2025)
 
-### Optimización de Interfaz (28/08/2025)
+### ✅ CRÍTICO RESUELTO: Respuestas Detalladas Funcionales (31/08/2025)
+1. ✅ **Fix crítico aplicado** - Problema de field mismatch `question_id` vs `id` resuelto
+2. ✅ **Búsqueda dual implementada** - Sistema busca por `question_id` primero, luego por `id`
+3. ✅ **Respuestas detalladas 100% operativas** - Todas las preguntas se muestran con contenido completo
+4. ✅ **Debug sistemático completado** - Issue root cause identificado y corregido
+5. ✅ **Verificación completa con Playwright** - Todas las funcionalidades probadas y funcionales
+
+### Optimización de Interfaz (29/08/2025)
 1. ✅ **Navegación simplificada** - Eliminada barra superior, botón Inicio en header
 2. ✅ **Selección de tests rediseñada** - 3 botones principales: Nuevo Test, Test Aleatorio, Repasar Fallos
 3. ✅ **Tests basados en JSON** - Carga directa desde archivos tests/*.json
 4. ✅ **Tests aleatorios mejorados** - Evita repeticiones, preguntas de múltiples fuentes
 5. ✅ **Base de datos limpia** - Esquema actualizado y sesiones reiniciadas
+6. ✅ **Interfaz de pregunta limpia** - Eliminada barra de categoría/dificultad para UI más simple
+7. ✅ **Sistema dinámico completo** - End-to-end funcional con resultados detallados
 
 ### Funcionalidades Previas
 1. ✅ **Resultados detallados completos** - Respuestas incorrectas con explicaciones y fuentes
@@ -26,10 +35,23 @@ docker compose down && docker compose up --build
 
 ## 🚀 Próximos Pasos Prioritarios
 
-1. **Gráficos y visualizaciones** - Chart.js para estadísticas
-2. **Modo oscuro** - Toggle para tema oscuro
-3. **Testing automatizado** - Tests unitarios y E2E
-4. **Optimizaciones de rendimiento** - Cache avanzado
+### Mejoras Sistema Dinámico
+1. **Validación Admin Panel** - Mejorar validación de archivos JSON subidos
+2. **Gestión de duplicados** - Interface para revisar y resolver preguntas duplicadas
+3. **Estadísticas de bancos** - Vista de rendimiento por banco de preguntas
+4. **Export/Import** - Backup y restauración de bancos de preguntas
+
+### Mejoras UX/UI
+5. **Gráficos y visualizaciones** - Chart.js para estadísticas avanzadas
+6. **Modo oscuro** - Toggle para tema oscuro
+7. **Confirmación de acciones** - Modales para eliminar/resetear datos
+8. **Loading states** - Indicadores de carga para operaciones lentas
+
+### Optimización Técnica
+9. **Testing automatizado** - Tests unitarios y E2E para nuevas funcionalidades
+10. **Optimizaciones de rendimiento** - Cache avanzado para consultas de preguntas
+11. **Logs estructurados** - Mejor tracking de errores y uso del sistema
+12. **Health checks mejorados** - Estado detallado del sistema
 
 ## Objetivo
 Desarrollar una aplicación web FastAPI que permita realizar tests interactivos basados en los archivos JSON generados manualmente, con estadísticas persistentes en SQLite.
@@ -138,33 +160,49 @@ Desarrollar una aplicación web FastAPI que permita realizar tests interactivos 
 - [x] **Filtrado inteligente** - Solo preguntas respondidas incorrectamente
 - [x] **Interfaz integrada** - Sin configuración adicional requerida
 
-#### 🔲 **4.4 Estadísticas Avanzadas**
-- [ ] **Gráficos básicos** - Chart.js para visualizaciones
-- [ ] **Evolución temporal** - Progreso a lo largo del tiempo
-- [ ] **Comparativa por test** - Qué tests son más difíciles
-- [ ] **Export de resultados** - Descargar CSV/JSON
+#### ✅ **4.4 Sistema Dinámico de Preguntas - COMPLETADO (2025-08)**
+- [x] **Base de datos rediseñada** - 8 tablas: questions, question_usage, dynamic_tests, test_sessions, user_answers, question_banks, test_stats, session_progress
+- [x] **Banco de preguntas** - Carga automática desde archivos bank_*.json  
+- [x] **3 modos dinámicos** - Random, Category, Difficulty con configuración
+- [x] **Anti-repetición** - Algoritmo inteligente basado en uso por usuario
+- [x] **Admin panel** - Upload y gestión de bancos de preguntas
+- [x] **Validación automática** - Detección y manejo de preguntas duplicadas
+- [x] **Schema consistency** - IDs estandarizados como string en toda la aplicación
+- [x] **Type consistency fix** - Corregidas inconsistencias críticas ID (string vs int) en schemas.py
+- [x] **Database documentation** - Documentado esquema completo de 8 tablas con tipos correctos
 
-#### 🔲 **4.5 Mejoras UX Mobile**
+#### 🔲 **4.5 Estadísticas Avanzadas**
+- [ ] **Gráficos básicos** - Chart.js para visualizaciones por banco
+- [ ] **Evolución temporal** - Progreso a lo largo del tiempo
+- [ ] **Comparativa por banco** - Qué bancos son más difíciles
+- [ ] **Export de resultados** - Descargar CSV/JSON
+- [ ] **Dashboard admin** - Vista de uso por banco y pregunta
+
+#### 🔲 **4.6 Mejoras UX Mobile**
 - [ ] **Confirmación de salida** - Modal de advertencia táctil
 - [ ] **Autoguardado** - Guardar progreso automáticamente
 - [ ] **Modo oscuro** - Toggle para tema oscuro (mejor para móvil nocturno)
 - [ ] **Gestos táctiles** - Swipe para navegar entre preguntas
 - [ ] **Orientación responsive** - Soporte portrait/landscape
 - [ ] **Accesibilidad móvil** - ARIA labels, botones accesibles para touch
+- [ ] **Loading states** - Spinners y feedback durante carga de tests
 
 ### 📋 **FASE 5: Optimización y Deployment**
 
 #### 🔲 **5.1 Optimización Backend**
-- [ ] **Cache en memoria** - Tests cargados una vez
-- [ ] **Validación de entrada** - Pydantic en todos los endpoints
-- [ ] **Logs estructurados** - Seguimiento de errores
-- [ ] **Health checks** - Endpoint de estado
+- [ ] **Cache en memoria** - Preguntas cargadas una vez, actualización inteligente
+- [ ] **Validación de entrada mejorada** - Pydantic en todos los endpoints nuevos
+- [ ] **Logs estructurados** - Seguimiento detallado de uso de preguntas y bancos
+- [ ] **Health checks mejorados** - Estado de BD, bancos cargados, estadísticas
+- [ ] **API rate limiting** - Protección contra abuso del sistema
+- [ ] **Backup automático** - Copias de seguridad programadas de la BD
 
 #### 🔲 **5.2 Testing y Validación**
-- [ ] **Tests unitarios** - Pytest para funciones core
-- [ ] **Tests de integración** - API endpoints
-- [ ] **Validación JSON** - Schema compliance
-- [ ] **Tests E2E** - Playwright/Selenium básico
+- [ ] **Tests unitarios** - Pytest para algoritmo anti-repetición y generación dinámica
+- [ ] **Tests de integración** - API endpoints del sistema dinámico
+- [ ] **Validación JSON** - Schema compliance para bancos de preguntas
+- [ ] **Tests E2E** - Flujo completo de tests dinámicos
+- [ ] **Performance testing** - Carga con múltiples usuarios y bancos grandes
 
 #### 🔲 **5.3 Documentation**
 - [ ] **API Documentation** - FastAPI automática en /docs
@@ -226,11 +264,20 @@ CREATE TABLE test_sessions (
     is_random_test BOOLEAN DEFAULT 0
 );
 
--- Respuestas individuales
+-- 8 tablas del sistema dinámico completo:
+-- 1. questions - Banco de preguntas con question_id TEXT
+-- 2. question_usage - Estadísticas de uso anti-repetición
+-- 3. dynamic_tests - Tests generados dinámicamente
+-- 4. test_sessions - Sesiones de tests completados
+-- 5. user_answers - Respuestas individuales por pregunta
+-- 6. question_banks - Metadatos de bancos JSON cargados
+-- 7. test_stats - Estadísticas agregadas (compatibilidad)
+-- 8. session_progress - Progreso actual de sesiones activas
+
 CREATE TABLE user_answers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id TEXT NOT NULL,
-    question_id INTEGER NOT NULL,
+    question_id TEXT NOT NULL,  -- Cambio crítico: TEXT para consistencia
     selected_answer INTEGER,
     correct_answer INTEGER,
     is_correct BOOLEAN,

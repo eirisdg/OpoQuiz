@@ -19,17 +19,6 @@
     
     <!-- Question Info -->
     <div class="card">
-        <div class="card-header">
-            <div class="question-meta">
-                <span class="question-category">{{ question.category.replace('_', ' ').title() }}</span>
-                <span class="question-difficulty difficulty-{{ question.difficulty }}">
-                    {{ question.difficulty.title() }}
-                </span>
-                {% if question.points > 1 %}
-                <span class="question-points">{{ question.points }} puntos</span>
-                {% endif %}
-            </div>
-        </div>
         <div class="card-body">
             <h2 class="question-title">{{ question.question }}</h2>
         </div>
@@ -340,7 +329,7 @@
             await apiCall(`/api/sessions/{{ session_id }}/answers`, {
                 method: 'POST',
                 body: JSON.stringify({
-                    question_id: {{ question.id }},
+                    question_id: "{{ question.question_id }}",
                     selected_answer: currentAnswer,
                     time_spent_seconds: timeSpent
                 })
