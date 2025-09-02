@@ -1,49 +1,39 @@
-# Imagen base ligera de Python
-FROM python:3.11-slim
+# Ultra-optimized Test Generator with Alpine Linux
+FROM python:3.11-alpine
 
-# Variables de build
+# Metadata and build args in single layer
+LABEL maintainer="Test Generator" \
+      version="1.0" \
+      description="Generic Test Generator - Mobile-first interactive testing system"
+
 ARG APP_USER=testapp
 ARG APP_UID=1000
 
-# Crear usuario no-root para seguridad
-RUN groupadd -g ${APP_UID} ${APP_USER} && \
-    useradd -u ${APP_UID} -g ${APP_USER} -d /app -m -s /bin/bash ${APP_USER}
-
-# Directorio de trabajo
-WORKDIR /app
-
-# Instalar dependencias del sistema mínimas
-RUN apt-get update && apt-get install -y \
-    curl \
-    sqlite3 \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Copiar requirements primero para cache de Docker layers
-COPY requirements.txt .
-
-# Instalar dependencias Python
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
-
-# Copiar código de la aplicación
-COPY app/ ./app/
-COPY static/ ./static/
-COPY templates/ ./templates/
-
-# Crear directorios necesarios
-RUN mkdir -p /app/tests /app/data /app/logs && \
+# Single RUN layer for system setup, user creation, dependencies, and cleanup
+RUN apk add --no-cache curl sqlite && \
+    addgroup -g ${APP_UID} ${APP_USER} && \
+    adduser -u ${APP_UID} -G ${APP_USER} -D -h /app ${APP_USER} && \
+    mkdir -p /app/tests /app/data && \
     chown -R ${APP_USER}:${APP_USER} /app
 
-# Cambiar a usuario no-root
+# Set working directory and user in same layer context
+WORKDIR /app
 USER ${APP_USER}
 
-# Puerto expuesto
-EXPOSE 8080
+# Copy requirements and install Python dependencies in single layer
+COPY --chown=${APP_USER}:${APP_USER} requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    rm requirements.txt
 
-# Health check
+# Copy application files with proper ownership
+COPY --chown=${APP_USER}:${APP_USER} app/ ./app/
+COPY --chown=${APP_USER}:${APP_USER} templates/ ./templates/
+COPY --chown=${APP_USER}:${APP_USER} question-bank-template.json test-schema.json ./
+
+# Runtime configuration
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8080/health || exit 1
 
-# Comando de inicio
 CMD ["python", "-m", "app.main"]
