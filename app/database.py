@@ -298,7 +298,7 @@ class DatabaseManager:
             # Load questions with duplicate checking by question_id
             questions_loaded = 0
             for question in bank_data.get('questions', []):
-                question_id = question['id']
+                question_id = f"{bank_id}_q{question['id'].zfill(3)}"
                 
                 # Check if question already exists (from other banks)
                 cursor = await db.execute("SELECT COUNT(*) FROM questions WHERE question_id = ?", (question_id,))
@@ -655,6 +655,17 @@ class DatabaseManager:
                  correct_answer, is_correct, points_available, points_earned, answered_at)
                 VALUES (?, ?, ?, ?, 0, 0, 1, 0, CURRENT_TIMESTAMP)
             """, (session_id, question_id, selected_answer, time_spent_seconds))
+            await db.commit()
+    
+    async def update_answer_details(self, session_id: str, question_id: str, question_text: str, correct_answer: int, is_correct: bool, points_available: int, points_earned: int):
+        """Update an existing answer with detailed information (for test completion)."""
+        async with self.get_connection() as db:
+            await db.execute("""
+                UPDATE user_answers 
+                SET question_text = ?, correct_answer = ?, is_correct = ?, 
+                    points_available = ?, points_earned = ?
+                WHERE session_id = ? AND question_id = ?
+            """, (question_text, correct_answer, is_correct, points_available, points_earned, session_id, question_id))
             await db.commit()
     
     async def get_session_answers(self, session_id: str) -> List[Dict[str, Any]]:

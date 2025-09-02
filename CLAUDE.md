@@ -196,9 +196,17 @@ docker compose down && docker compose up --build
 ```
 Los cambios en código **NO** se reflejan automáticamente. Docker debe ser reiniciado para aplicar modificaciones.
 
-### Recent Enhancements (2025-08)
+### Recent Enhancements (2025-09)
 
-#### Critical Bug Fixes (31/08/2025) - LATEST
+#### Mobile UX Improvements (02/09/2025) - LATEST
+- ✅ **Mobile Navigation Redesign**: Fixed buttons to appear side-by-side at bottom on mobile, normal cards on desktop
+- ✅ **Dynamic Content Spacing**: Removed excessive fixed padding, implemented natural content flow
+- ✅ **Modal Button Layout**: Fixed test configuration modal buttons to stack vertically on mobile with proper order
+- ✅ **Header Consistency**: Unified admin and main panel header widths for consistent design
+- ✅ **Footer Visibility**: Ensured footer appears properly on mobile without being hidden by fixed navigation
+- ✅ **Modal Close Button**: Fixed positioning of close button in modals to appear at top-right corner
+
+#### Critical Bug Fixes (31/08/2025)
 - ✅ **Detailed Results Fix**: Fixed critical issue where detailed answers weren't displayed in results page
 - ✅ **Field Mismatch Resolution**: Resolved `question_id` vs `id` field inconsistency in dynamic tests (main.py:635-637)
 - ✅ **Dual Search Implementation**: Added fallback search logic (question_id first, then id) for question matching
@@ -230,3 +238,35 @@ Los cambios en código **NO** se reflejan automáticamente. Docker debe ser rein
 - Validar cambios navegando a resultados de tests completados
 - Probar funcionalidad "Repasar Errores" desde el historial
 - Verificar visualización de información de fuente en respuestas detalladas
+
+## Pending Features (TODO)
+
+### High Priority
+1. **Question Bank Management**: 
+   - Individual question deletion from loaded banks
+   - Admin interface for question-level CRUD operations
+   - Bulk question management tools
+
+2. **Mobile Swipe Navigation**:
+   - Implement touch swipe gestures during tests
+   - Left swipe → next question
+   - Right swipe → previous question
+   - Mobile-only feature with visual feedback
+
+3. **Documentation Updates**:
+   - Complete README.md refresh
+   - Update all inline code comments
+   - API documentation generation
+   - User guide creation
+
+### Medium Priority
+- Question editing interface
+- Advanced filtering in admin panel
+- Export functionality for question banks
+- Performance optimizations for large question sets
+
+### Current Status
+- **Core System**: 100% functional with all major features implemented
+- **Mobile UX**: Recently optimized with responsive navigation and modal fixes
+- **Database**: Stable with proper question bank management and anti-repetition algorithms
+- **Testing**: Manual verification completed, all critical paths working

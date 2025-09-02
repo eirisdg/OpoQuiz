@@ -903,9 +903,7 @@ async def complete_test(
     # Calculate results
     answers_data = session_data.get('answers_data', {})
     detailed_answers = []
-    correct_count = 0
     total_points = 0
-    points_earned = 0
     category_stats = {}
     difficulty_stats = {}
     
@@ -920,10 +918,6 @@ async def complete_test(
         correct_answer = question.get('correct_answer') if isinstance(question, dict) else question.correct_answer
         is_correct = selected_answer == correct_answer
         question_points = question.get('points', 1) if isinstance(question, dict) else getattr(question, 'points', 1)
-        
-        if is_correct:
-            correct_count += 1
-            points_earned += question_points
         
         total_points += question_points
         
@@ -954,16 +948,16 @@ async def complete_test(
         if source_info_raw and isinstance(source_info_raw, dict) and source_info_raw.get('document'):
             source_info = source_info_raw
         
-        await db.save_answer(session_id, {
-            'question_id': str(q_id),
-            'question_text': question_text,
-            'selected_answer': selected_answer,
-            'correct_answer': correct_answer,
-            'is_correct': is_correct,
-            'points_available': question_points,
-            'points_earned': question_points if is_correct else 0,
-            'time_spent_seconds': user_answer_data.get('time_spent_seconds', 0)
-        })
+        # Update existing answer with detailed information
+        await db.update_answer_details(
+            session_id,
+            str(q_id),
+            question_text,
+            correct_answer,
+            is_correct,
+            question_points,
+            question_points if is_correct else 0
+        )
         
         detailed_answers.append(AnswerDetail(
             question_id=str(q_id),
@@ -979,7 +973,13 @@ async def complete_test(
             time_spent_seconds=user_answer_data.get('time_spent_seconds', 0)
         ))
     
-    # Calculate final metrics
+    # Calculate final metrics from database after all answers are updated
+    async with db.get_connection() as conn:
+        cursor = await conn.execute("SELECT SUM(is_correct), SUM(points_earned) FROM user_answers WHERE session_id = ?", (session_id,))
+        db_result = await cursor.fetchone()
+        correct_count = int(db_result[0]) if db_result[0] else 0
+        points_earned = int(db_result[1]) if db_result[1] else 0
+    
     percentage = (points_earned / total_points * 100) if total_points > 0 else 0
     duration = int((datetime.now() - datetime.fromisoformat(session_data['started_at'].replace('Z', '+00:00'))).total_seconds())
     passing_grade = test_data.get('passing_grade', 70) if isinstance(test_data, dict) else getattr(test_data, 'passing_grade', 70)

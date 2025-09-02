@@ -1,3 +1,5 @@
+"""Configuration settings for the Test Generator application."""
+
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os

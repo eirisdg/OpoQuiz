@@ -1,9 +1,19 @@
-# TODO - Aplicación de Tests de Seguridad Social
+# TODO - Test Generator
 
-## Estado Actual: ✅ **SISTEMA DINÁMICO 100% FUNCIONAL**
-Sistema completamente funcional con API REST, interfaz móvil-first simplificada, tests aleatorios mejorados, **navegación optimizada**, **selección de tests rediseñada**, **sistema dinámico end-to-end operativo** y **respuestas detalladas completamente funcionales**.
+## Estado Actual: ✅ **SISTEMA COMPLETO Y OPTIMIZADO 100% FUNCIONAL**
+Sistema completamente funcional con API REST, interfaz móvil-first optimizada, navegación responsiva, modales móviles mejorados y UX pulida en todas las plataformas.
 
-## 🚀 Últimas Funcionalidades Implementadas (Agosto 2025)
+## 🚀 Últimas Funcionalidades Implementadas (Septiembre 2025)
+
+### ✅ MEJORAS UX MOBILE COMPLETADAS (02/09/2025)
+1. ✅ **Navegación móvil rediseñada** - Botones fijos al fondo en móvil, cards normales en desktop
+2. ✅ **Espaciado dinámico** - Eliminado padding fijo excesivo, flujo de contenido natural  
+3. ✅ **Layout modal mejorado** - Botones apilados verticalmente en móvil con orden correcto
+4. ✅ **Consistencia de headers** - Anchos unificados entre admin y panel principal
+5. ✅ **Visibilidad de footer** - Footer visible correctamente en móvil sin solapamiento
+6. ✅ **Botón cerrar modal** - Posicionamiento correcto en esquina superior derecha
+
+### Funcionalidades Implementadas (Agosto 2025)
 
 ### ✅ CRÍTICO RESUELTO: Respuestas Detalladas Funcionales (31/08/2025)
 1. ✅ **Fix crítico aplicado** - Problema de field mismatch `question_id` vs `id` resuelto
@@ -33,13 +43,35 @@ Sistema completamente funcional con API REST, interfaz móvil-first simplificada
 docker compose down && docker compose up --build
 ```
 
-## 🚀 Próximos Pasos Prioritarios
+## 🚀 Próximas Funcionalidades Prioritarias
 
-### Mejoras Sistema Dinámico
-1. **Validación Admin Panel** - Mejorar validación de archivos JSON subidos
-2. **Gestión de duplicados** - Interface para revisar y resolver preguntas duplicadas
-3. **Estadísticas de bancos** - Vista de rendimiento por banco de preguntas
-4. **Export/Import** - Backup y restauración de bancos de preguntas
+### ALTA PRIORIDAD (Solicitado por Usuario)
+1. **🗑️ Eliminación Individual de Preguntas** - CRÍTICO
+   - Interface admin para eliminar preguntas específicas de bancos cargados
+   - Navegador de preguntas con búsqueda y filtros
+   - Botones de eliminación con confirmación 
+   - Eliminación en cascada de respuestas/sesiones relacionadas
+   - API endpoint: `DELETE /api/questions/{question_id}`
+
+2. **📱 Navegación por Gestos Móviles** - UX ENHANCEMENT
+   - Deslizar izquierda → siguiente pregunta
+   - Deslizar derecha → pregunta anterior
+   - Solo activo en versión móvil (≤767px)
+   - Feedback visual durante el gesto
+   - Integración con botones existentes
+
+3. **📚 Actualización Completa de Documentación** - MAINTENANCE
+   - README.md completamente renovado
+   - Comentarios en línea en todo el código
+   - Documentación API automática
+   - Guía de usuario final
+   - Instrucciones de despliegue actualizadas
+
+### Mejoras Sistema Dinámico (Prioridad Media)
+4. **Validación Admin Panel** - Mejorar validación de archivos JSON subidos
+5. **Gestión de duplicados** - Interface para revisar y resolver preguntas duplicadas
+6. **Estadísticas de bancos** - Vista de rendimiento por banco de preguntas
+7. **Export/Import** - Backup y restauración de bancos de preguntas
 
 ### Mejoras UX/UI
 5. **Gráficos y visualizaciones** - Chart.js para estadísticas avanzadas

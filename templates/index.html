@@ -380,7 +380,7 @@
         padding: 20px 20px 0 20px;
         display: flex;
         justify-content: space-between;
-        align-items: center;
+        align-items: flex-start;
         border-bottom: 1px solid #eee;
         margin-bottom: 20px;
     }
@@ -405,6 +405,8 @@
         justify-content: center;
         border-radius: 50%;
         transition: background-color 0.2s;
+        flex-shrink: 0;
+        margin-left: 12px;
     }
     
     .modal-close:hover {
@@ -497,6 +499,28 @@
     
     .modal-actions .btn {
         min-width: 120px;
+    }
+    
+    /* Mobile modal button layout */
+    @media (max-width: 767px) {
+        .modal-actions {
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .modal-actions .btn {
+            width: 100%;
+            min-width: unset;
+            order: 0;
+        }
+        
+        .modal-actions .btn-secondary {
+            order: 1; /* Cancel button goes below */
+        }
+        
+        .modal-actions .btn-primary {
+            order: 0; /* Generate button goes above */
+        }
     }
     
     /* Responsive adjustments */
