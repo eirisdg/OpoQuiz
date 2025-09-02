@@ -46,21 +46,36 @@ docker compose down && docker compose up --build
 ## 🚀 Próximas Funcionalidades Prioritarias
 
 ### ALTA PRIORIDAD (Solicitado por Usuario)
-1. **🗑️ Eliminación Individual de Preguntas** - CRÍTICO
+
+1. **🏛️ Sistema Multi-Base de Datos por Oposición** - ARQUITECTURAL CRÍTICO
+   - **Problema**: Base de datos actual específica para Seguridad Social
+   - **Solución**: Sistema para múltiples tipos de oposiciones
+   - **Funcionalidades necesarias**:
+     - Selección de base de datos al abrir la aplicación por primera vez
+     - Botón en pantalla principal para cambiar entre bases de datos
+     - Gestión independiente de estadísticas por oposición
+     - Arquitectura escalable para nuevas oposiciones
+   - **Implementación sugerida**:
+     - Base de datos separada por oposición: `data/oposicion_[tipo].db`
+     - Configuración persistente de oposición seleccionada
+     - Interface de selección/cambio con preview de contenido
+     - Migration automático de datos existentes
+
+2. **🗑️ Eliminación Individual de Preguntas** - GESTIÓN CRÍTICA
    - Interface admin para eliminar preguntas específicas de bancos cargados
    - Navegador de preguntas con búsqueda y filtros
    - Botones de eliminación con confirmación 
    - Eliminación en cascada de respuestas/sesiones relacionadas
    - API endpoint: `DELETE /api/questions/{question_id}`
 
-2. **📱 Navegación por Gestos Móviles** - UX ENHANCEMENT
+3. **📱 Navegación por Gestos Móviles** - UX ENHANCEMENT
    - Deslizar izquierda → siguiente pregunta
    - Deslizar derecha → pregunta anterior
    - Solo activo en versión móvil (≤767px)
    - Feedback visual durante el gesto
    - Integración con botones existentes
 
-3. **📚 Actualización Completa de Documentación** - MAINTENANCE
+4. **📚 Actualización Completa de Documentación** - MAINTENANCE
    - README.md completamente renovado
    - Comentarios en línea en todo el código
    - Documentación API automática
@@ -68,16 +83,16 @@ docker compose down && docker compose up --build
    - Instrucciones de despliegue actualizadas
 
 ### Mejoras Sistema Dinámico (Prioridad Media)
-4. **Validación Admin Panel** - Mejorar validación de archivos JSON subidos
-5. **Gestión de duplicados** - Interface para revisar y resolver preguntas duplicadas
-6. **Estadísticas de bancos** - Vista de rendimiento por banco de preguntas
-7. **Export/Import** - Backup y restauración de bancos de preguntas
+5. **Validación Admin Panel** - Mejorar validación de archivos JSON subidos
+6. **Gestión de duplicados** - Interface para revisar y resolver preguntas duplicadas
+7. **Estadísticas de bancos** - Vista de rendimiento por banco de preguntas
+8. **Export/Import** - Backup y restauración de bancos de preguntas
 
-### Mejoras UX/UI
-5. **Gráficos y visualizaciones** - Chart.js para estadísticas avanzadas
-6. **Modo oscuro** - Toggle para tema oscuro
-7. **Confirmación de acciones** - Modales para eliminar/resetear datos
-8. **Loading states** - Indicadores de carga para operaciones lentas
+### Mejoras UX/UI (Prioridad Baja)
+9. **Gráficos y visualizaciones** - Chart.js para estadísticas avanzadas
+10. **Modo oscuro** - Toggle para tema oscuro
+11. **Confirmación de acciones** - Modales para eliminar/resetear datos
+12. **Loading states** - Indicadores de carga para operaciones lentas
 
 ### Optimización Técnica
 9. **Testing automatizado** - Tests unitarios y E2E para nuevas funcionalidades
@@ -399,3 +414,102 @@ open http://localhost:8080
 # Ver documentación API
 open http://localhost:8080/docs
 ```
+
+## Arquitectura Multi-Oposición (Detalles de Implementación)
+
+### 🏗️ Propuesta de Arquitectura
+```
+data/
+├── seguridad_social.db          # Base de datos actual (migrada)
+├── policia_nacional.db          # Nueva oposición
+├── educacion.db                 # Otra oposición
+├── config.json                  # Configuración de oposición activa
+└── oposiciones_metadata.json    # Información de cada oposición
+```
+
+### 🔧 Cambios Necesarios en el Código
+1. **database.py**:
+   - Parámetro `db_name` en DatabaseManager
+   - Función `list_available_databases()`
+   - Función `switch_database(db_name)`
+
+2. **main.py**:
+   - Endpoint `GET /api/oposiciones` - Listar oposiciones disponibles
+   - Endpoint `POST /api/switch-oposicion` - Cambiar base de datos activa
+   - Middleware para verificar oposición seleccionada
+
+3. **Frontend**:
+   - Modal de selección inicial de oposición
+   - Botón "Cambiar Oposición" en header principal
+   - Preview de estadísticas antes de cambio
+
+### 📊 Metadata de Oposiciones
+```json
+{
+  "oposiciones": {
+    "seguridad_social": {
+      "name": "Administrativo - Seguridad Social",
+      "description": "Oposiciones para Administrativo del Estado - Seguridad Social",
+      "icon": "🏛️",
+      "color": "#0f4c75",
+      "created_at": "2025-09-01",
+      "question_count": 850
+    },
+    "policia_nacional": {
+      "name": "Policía Nacional",
+      "description": "Oposiciones a Policía Nacional - Escala Básica",
+      "icon": "👮",
+      "color": "#1a365d",
+      "created_at": "2025-09-02",
+      "question_count": 0
+    }
+  },
+  "active": "seguridad_social"
+}
+```
+
+### 🎯 Experiencia de Usuario Propuesta
+1. **Primera Vez**:
+   - Modal de bienvenida con selección de tipo de oposición
+   - Opciones visuales con iconos y descripciones
+   - Botón "Crear Nueva Oposición" para casos personalizados
+
+2. **Pantalla Principal**:
+   - Indicador en header: "📚 Seguridad Social" 
+   - Botón "Cambiar Oposición" junto al título
+   - Estadísticas específicas de la oposición activa
+
+3. **Cambio de Oposición**:
+   - Modal con lista de oposiciones disponibles
+   - Preview de estadísticas (preguntas, tests realizados)
+   - Confirmación antes del cambio
+   - Loading durante la migración
+
+### 🔄 Migración de Datos Existentes
+```python
+# Pseudocódigo para migración automática
+def migrate_existing_data():
+    if os.path.exists('data/tests_stats.db'):
+        # Renombrar base actual a seguridad_social.db
+        os.rename('data/tests_stats.db', 'data/seguridad_social.db')
+        
+        # Crear metadata inicial
+        create_metadata_file({
+            "active": "seguridad_social",
+            "oposiciones": {
+                "seguridad_social": {
+                    "name": "Administrativo - Seguridad Social",
+                    "migrated_from": "tests_stats.db"
+                }
+            }
+        })
+```
+
+## Prioridad de Implementación Actualizada
+
+1. **🏛️ Multi-Database System** - Funcionalidad arquitectural fundamental
+2. **🗑️ Individual Question Deletion** - Most requested management feature  
+3. **📱 Mobile Swipe Navigation** - Enhances mobile UX significantly
+4. **📚 Documentation Updates** - Important for maintainability
+5. **Advanced Admin Features** - Nice-to-have improvements
+6. **Performance Optimizations** - Only needed for large-scale usage
